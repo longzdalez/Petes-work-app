@@ -79,7 +79,7 @@ export default function Home() {
     if (name === null) return
     const j = put('job', { name: name.trim() || 'New job' })
     put('folder', { name: 'General', order: 0 }, { job_id: j.id })
-    setEditing(j.id)
+    nav(`/job/${j.id}`)
   }
   const editJob = jobs.find(j => j.id === editing)
   return (
@@ -95,9 +95,9 @@ export default function Home() {
           <button className="btn primary" onClick={newJob}><Icon name="plus" size={18} /> New job</button>
         </div>
         {jobs.length === 0
-          ? <Empty icon="folder" title="No jobs yet" text="Press New job to add your first one. Press and hold a job any time to change its details." />
+          ? <Empty icon="folder" title="No jobs yet" text="Press New job to add your first one. Each job has its own pages for Documents, Materials, Money, Schedule and Invoices, which open from the toolbar at the bottom of the job." />
           : <div className="job-list">{jobs.map(j => <JobCard key={j.id} job={j} onLong={j => setEditing(j.id)} />)}</div>}
-        {jobs.length > 0 && <p className="hint">Tip: press and hold a job to rename it or change its details.</p>}
+        {jobs.length > 0 && <p className="hint">Tap a job to open its Documents, Materials, Money, Schedule and Invoices. Press and hold to rename it or change its details.</p>}
       </main>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
     </div>
