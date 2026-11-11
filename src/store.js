@@ -243,3 +243,47 @@ export function useOnline() {
   }, [])
   return o
 }
+
+// ---- backup & restore ----
+const LS_BACKUP = 'pw_last_backup'
+export const lastBackup = () => localStorage.getItem(LS_BACKUP) || ''
+
+const blobToDataUrl = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b) })
+const dataUrlToBlob = async u => (await fetch(u)).blob()
+
+// One file holding every job, list, payment, invoice and document.
+export async function makeBackup() {
+  const files = {}
+  for (const r of Object.values(records)) {
+    if (r.kind !== 'doc' || r.deleted || !r.data?.path) continue
+    try { const b = await getFile(r.data.path); if (b) files[r.data.path] = await blobToDataUrl(b) } catch { }
+  }
+  const body = JSON.stringify({ app: 'pete-work', version: 1, created: new Date().toISOString(), records: Object.values(records), files })
+  const d = new Date()
+  const name = `Pete-Work-backup-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.json`
+  return new File([body], name, { type: 'application/json' })
+}
+export function markBackedUp() { localStorage.setItem(LS_BACKUP, new Date().toISOString()); emit() }
+
+// Merge a backup into this phone. Newer changes win, so nothing newer is overwritten.
+export async function restoreBackup(file) {
+  const json = JSON.parse(await file.text())
+  if (json.app !== 'pete-work' || !Array.isArray(json.records)) throw new Error("This isn't a Pete Work backup file")
+  let added = 0
+  for (const r of json.records) {
+    const cur = records[r.id]
+    if (!cur || (r.updated_at || '') > (cur.updated_at || '')) { records[r.id] = r; pending[r.id] = true; added++ }
+  }
+  for (const [path, url] of Object.entries(json.files || {})) {
+    try { const b = await dataUrlToBlob(url); await idbDo('readwrite', st => st.put(b, path)) } catch { }
+  }
+  save(); emit(); schedulePush()
+  return { added, total: json.records.length, created: json.created }
+}
+
+export function hasData() { return Object.values(records).some(r => !r.deleted && r.kind !== 'settings') }
+
+// Ask the browser not to clear the app's storage when the phone is low on space
+export async function keepStorage() {
+  try { if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist() } catch { }
+}

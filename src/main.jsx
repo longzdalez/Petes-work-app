@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { initCloud, cloudEnabled, useStatus } from './store'
+import { initCloud, cloudEnabled, useStatus, keepStorage } from './store'
 import { useRoute } from './router'
 import Home from './pages/Home'
 import JobInfo from './pages/Job'
@@ -49,6 +49,7 @@ function App() {
 }
 
 initCloud()
+keepStorage()
 createRoot(document.getElementById('root')).render(<App />)
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

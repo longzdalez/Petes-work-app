@@ -293,3 +293,5 @@ a { color: var(--blue); }
 .two > * { min-width: 0; }
 .field input { min-width: 0; max-width: 100%; }
 .field input[type=date] { -webkit-appearance: none; appearance: none; }
+.backup-nudge { display: flex; align-items: center; gap: 12px; border-left: 5px solid #f0a020; }
+.backup-nudge .nudge-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }

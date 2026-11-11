@@ -3,6 +3,7 @@ import { put, update, removeDeep, useList, useStatus, cloudEnabled } from '../st
 import { Icon, Sheet, Field, TopBar, Empty, useLongPress, confirmDelete } from '../ui'
 import { niceDate, today, initials } from '../util'
 import { nav } from '../router'
+import { BackupReminder } from '../Backup'
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -89,6 +90,7 @@ export default function Home() {
           {cloudEnabled && <span className={'sync-dot ' + (st.signedIn && !st.error ? 'ok' : 'bad')} />}
           <Icon name="settings" /></button>} />
       <main className="content">
+        <BackupReminder />
         <TodoBox />
         <div className="section-head">
           <h2>Your jobs</h2>

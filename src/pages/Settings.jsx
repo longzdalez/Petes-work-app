@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { put, useRecord, useStatus, cloudEnabled, signIn, signUp, signOut } from '../store'
 import { Icon, TopBar, Field } from '../ui'
 import { nav, back } from '../router'
+import { BackupCard } from '../Backup'
 
 export function useSettings() {
   const r = useRecord('settings')
@@ -65,6 +66,8 @@ export default function Settings() {
             </>
             : <SignIn />)}
         </section>
+
+        <BackupCard />
 
         <section className="card">
           <div className="card-head"><h2>The two owners</h2></div>
