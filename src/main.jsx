@@ -16,6 +16,7 @@ import VoiceButton from './Voice'
 function App() {
   const r = useRoute()
   const st = useStatus()
+  if (!st.ready) return null
   if (cloudEnabled && !st.signedIn && r[0] !== 'settings') {
     return (
       <div className="page welcome">

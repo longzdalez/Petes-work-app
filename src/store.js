@@ -16,7 +16,7 @@ let records = load(LS_RECORDS, {})
 let pending = load(LS_PENDING, {})
 let version = 0
 const listeners = new Set()
-export const status = { online: navigator.onLine, syncing: false, signedIn: false, error: '' }
+export const status = { online: navigator.onLine, syncing: false, signedIn: false, error: '', ready: !cloudEnabled }
 
 function load(k, d) { try { return JSON.parse(localStorage.getItem(k)) || d } catch { return d } }
 function save() {
@@ -153,6 +153,7 @@ export async function initCloud() {
   if (!cloudEnabled) return
   const { data } = await supabase.auth.getSession()
   status.signedIn = !!data.session
+  status.ready = true
   emit()
   supabase.auth.onAuthStateChange((_e, session) => {
     const was = status.signedIn
