@@ -54,7 +54,7 @@ export default function Schedule({ id }) {
           <Field label="Job start" type="date" value={d.start} onChange={v => update(id, { start: v })} />
           <Field label="Job finish" type="date" value={d.finish} onChange={v => update(id, { finish: v })} />
         </div>
-        {weeks && <p className="muted small" style={{ margin: '4px 0 0' }}>Planned length: about {weeks} weeks. The job period is shaded blue on the calendar.</p>}
+        {weeks && <p className="muted small" style={{ margin: '4px 0 0' }}>Planned length: about {weeks} weeks. The job period is shaded green on the calendar.</p>}
       </section>
       <section className="card cal-card">
         <MonthCalendar items={items} range={d.start ? [d.start, d.finish || d.start] : null} onDay={setDay} month={month} setMonth={setMonth} />

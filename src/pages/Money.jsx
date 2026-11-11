@@ -1,9 +1,28 @@
 import { useState } from 'react'
-import { put, update, remove, useRecord, useList } from '../store'
-import { Icon, Sheet, Field, Empty, confirmDelete } from '../ui'
+import { put, update, remove, useRecord, useList, list } from '../store'
+import { Icon, Sheet, Field, Empty, confirmDelete, Suggest } from '../ui'
 import { JobShell } from './Job'
 import { money, num, today, shortDate, niceDate } from '../util'
 import { useSettings } from './Settings'
+import { storeFile, pickFile, openPath, shareOrDownload } from '../files'
+import { invoiceTotals } from '../pdf'
+import { nav } from '../router'
+
+export const cisDeduction = d => d.cat === 'contractor' && num(d.cisRate) ? Math.round(num(d.cisLabour || d.amount) * num(d.cisRate)) / 100 : 0
+
+// Every payment across all jobs, as a spreadsheet file for the accountant (UK tax year by default)
+export function accountantCsv(from, to) {
+  const jobs = Object.fromEntries(list('job').map(j => [j.id, j.data.name]))
+  const rows = list('money', r => r.data.status !== 'upcoming' && r.data.date >= from && r.data.date <= to).sort((a, b) => a.data.date.localeCompare(b.data.date))
+  const esc = v => { const t = String(v ?? ''); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t }
+  const head = ['Date', 'Job', 'In/Out', 'Category', 'Paid to/from', 'Description', 'Amount', 'VAT included', 'CIS rate %', 'CIS deducted', 'Receipt photo']
+  const body = rows.map(r => { const d = r.data; return [d.date, jobs[r.job_id] || '', d.dir === 'in' ? 'In' : 'Out', catLabel(d.dir, d.cat), d.person || '', d.desc || '', num(d.amount).toFixed(2), num(d.vat).toFixed(2), d.cat === 'contractor' ? num(d.cisRate) : '', cisDeduction(d).toFixed(2), d.receipt ? 'Yes' : ''] })
+  const totIn = rows.filter(r => r.data.dir === 'in').reduce((s, r) => s + num(r.data.amount), 0)
+  const totOut = rows.filter(r => r.data.dir === 'out').reduce((s, r) => s + num(r.data.amount), 0)
+  body.push([], ['', '', '', '', '', 'Total in', totIn.toFixed(2)], ['', '', '', '', '', 'Total out', totOut.toFixed(2)], ['', '', '', '', '', 'Profit', (totIn - totOut).toFixed(2)])
+  const csv = [head, ...body].map(r => r.map(esc).join(',')).join('\r\n')
+  return { file: new File([csv], `Pete Work accounts ${from} to ${to}.csv`, { type: 'text/csv' }), count: rows.length }
+}
 
 const CATS_IN = [{ k: 'client', l: 'Client payment' }, { k: 'other', l: 'Other' }]
 const CATS_OUT = [{ k: 'wages', l: 'Wages' }, { k: 'contractor', l: 'Contractor' }, { k: 'materials', l: 'Materials' }, { k: 'other', l: 'Other' }]
@@ -14,6 +33,7 @@ function EntrySheet({ entry, jobId, onClose, owners }) {
   const isNew = !entry.id
   const [d, setD] = useState({ dir: 'in', cat: 'client', date: today(), status: 'paid', amount: '', desc: '', person: '', ...entry.data })
   const set = p => setD(x => ({ ...x, ...p }))
+  const [busy, setBusy] = useState(false)
   const cats = d.dir === 'in' ? CATS_IN : CATS_OUT
   const save = () => {
     if (!num(d.amount)) return alert('Please put in an amount')
@@ -44,7 +64,31 @@ function EntrySheet({ entry, jobId, onClose, owners }) {
         </label>
       )}
       {d.cat === 'contractor' && <label className="field"><span>Contractor name</span><input value={d.person} onChange={e => set({ person: e.target.value })} /></label>}
-      <label className="field"><span>What was it for?</span><input value={d.desc} onChange={e => set({ desc: e.target.value })} placeholder={d.dir === 'in' ? 'e.g. Deposit' : 'e.g. Timber from Jewson'} /></label>
+      <label className="field"><span>What was it for?</span><input value={d.desc} list="money-sugg" onChange={e => set({ desc: e.target.value })} placeholder={d.dir === 'in' ? 'e.g. Deposit' : 'e.g. Timber from Jewson'} /></label>
+      <Suggest id="money-sugg" values={list('money').map(m => m.data.desc)} />
+      {d.dir === 'out' && <>
+        <button className="receipt-pick" onClick={async () => {
+          if (d.receipt) return openPath(d.receipt.path)
+          const [f] = await pickFile({ accept: 'image/*', capture: 'environment' }); if (!f) return
+          setBusy(true); const st = await storeFile(f, `${jobId}/receipts`); set({ receipt: { path: st.path, thumb: st.thumb } }); setBusy(false)
+        }}>
+          {d.receipt ? <img src={d.receipt.thumb} alt="" /> : <Icon name="receipt" />}
+          <span>{busy ? 'Saving photo…' : d.receipt ? 'Receipt saved (tap to view)' : 'Take a photo of the receipt'}</span>
+        </button>
+        {d.receipt && <button className="btn ghost small" style={{ marginTop: -6, marginBottom: 12 }} onClick={() => set({ receipt: null })}>Remove receipt</button>}
+        <div className="two">
+          <label className="field"><span>VAT included £</span><input inputMode="decimal" value={d.vat || ''} onChange={e => set({ vat: e.target.value })} placeholder="0.00" /></label>
+          <button className="btn ghost" style={{ marginTop: 24 }} onClick={() => set({ vat: (num(d.amount) / 6).toFixed(2) })}>Standard 20% VAT</button>
+        </div>
+      </>}
+      {d.cat === 'contractor' && <div className="cis-box">
+        <b>CIS deduction</b> (for subcontractors under the Construction Industry Scheme)
+        <div className="chips" style={{ margin: '8px 0' }}>{[0, 20, 30].map(r => <button key={r} className={'chip' + (num(d.cisRate) === r ? ' on' : '')} onClick={() => set({ cisRate: r })}>{r ? r + '%' : 'None'}</button>)}</div>
+        {num(d.cisRate) > 0 && <>
+          <label className="field" style={{ marginBottom: 6 }}><span>Labour part of the bill £ (CIS isn't taken off materials)</span><input inputMode="decimal" value={d.cisLabour ?? ''} placeholder={String(num(d.amount) || '')} onChange={e => set({ cisLabour: e.target.value })} /></label>
+          <div>Deduct <b>{money(cisDeduction({ ...d, amount: num(d.amount) }))}</b> for HMRC, so pay them <b>{money(num(d.amount) - cisDeduction({ ...d, amount: num(d.amount) }))}</b>.</div>
+        </>}
+      </div>}
       <div className="sheet-actions">
         {!isNew && <button className="btn danger" onClick={() => { if (confirmDelete('this entry')) { remove(entry.id); onClose() } }}><Icon name="trash" size={18} /></button>}
         {!isNew && d.status === 'upcoming' && <button className="btn ghost" onClick={() => { update(entry.id, { ...d, amount: num(d.amount), status: 'paid', date: today() }); onClose() }}>Mark paid today</button>}
@@ -105,7 +149,10 @@ export default function Money({ id }) {
   const entries = useList('money', r => r.job_id === id, byDate)
   const [edit, setEdit] = useState(null)
   const paid = entries.filter(e => e.data.status !== 'upcoming')
-  const upcoming = entries.filter(e => e.data.status === 'upcoming')
+  const invs = useList('invoice', r => r.job_id === id && r.data.type === 'invoice' && r.data.status !== 'paid' && r.data.due)
+  const upcoming = [...entries.filter(e => e.data.status === 'upcoming'),
+    ...invs.map(i => ({ id: i.id, invoice: true, data: { dir: 'in', amount: invoiceTotals(i.data).total, date: i.data.due, desc: `Invoice ${i.data.number}${i.data.status === 'draft' ? ' (not sent yet)' : ''}`, cat: 'client' } }))]
+    .filter(e => e.data.amount).sort((a, b) => a.data.date.localeCompare(b.data.date))
   const sum = arr => arr.reduce((s, e) => s + (Number(e.data.amount) || 0), 0)
   const moneyIn = sum(paid.filter(e => e.data.dir === 'in'))
   const outs = paid.filter(e => e.data.dir === 'out')
@@ -141,7 +188,7 @@ export default function Money({ id }) {
               return (
                 <tr key={e.id} onClick={() => setEdit(e)}>
                   <td className="nowrap">{shortDate(e.data.date)}</td>
-                  <td><div>{e.data.desc || catLabel(e.data.dir, e.data.cat)}</div><div className="muted small">{catLabel(e.data.dir, e.data.cat)}{e.data.person ? ` · ${e.data.person}` : ''}</div></td>
+                  <td><div>{e.data.desc || catLabel(e.data.dir, e.data.cat)}{e.data.receipt && <Icon name="receipt" size={13} style={{ marginLeft: 4, color: '#3b9268' }} />}</div><div className="muted small">{catLabel(e.data.dir, e.data.cat)}{e.data.person ? ` · ${e.data.person}` : ''}</div></td>
                   <td className={'r nowrap ' + (e.data.dir === 'in' ? 'pos' : 'neg')}>{e.data.dir === 'in' ? '+' : '−'}{money(e.data.amount)}</td>
                   <td className="r nowrap">{money(running)}</td>
                 </tr>
@@ -163,10 +210,10 @@ export default function Money({ id }) {
       <section className="card">
         <div className="card-head"><h2>Upcoming payments</h2></div>
         {upcoming.length === 0
-          ? <p className="muted small">Add a payment you're expecting (in or out) and set it to Upcoming to see a forecast.</p>
+          ? <p className="muted small">Add a payment you're expecting (in or out) and set it to Upcoming. Unpaid invoices show here too, so you can see where the money is heading.</p>
           : <>
             {upcoming.map(e => (
-              <div key={e.id} className="up-row tap" onClick={() => setEdit(e)}>
+              <div key={e.id} className="up-row tap" onClick={() => e.invoice ? nav(`/job/${id}/invoice/${e.id}`) : setEdit(e)}>
                 <span className="small nowrap muted">{shortDate(e.data.date)}</span>
                 <span className="text">{e.data.desc || catLabel(e.data.dir, e.data.cat)}</span>
                 <span className={'nowrap ' + (e.data.dir === 'in' ? 'pos' : 'neg')}>{e.data.dir === 'in' ? '+' : '−'}{money(e.data.amount)}</span>

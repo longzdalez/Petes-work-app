@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { DAYS, MONTHS, URGENCY, monthGrid, today, ymd, vibrate } from './util'
 
 const PATHS = {
@@ -25,6 +26,19 @@ const PATHS = {
   phone: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z',
   edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z',
   cloud: 'M18 10h-1.3A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
+  camera: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  users: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
+  clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
+  extra: 'M12 2l3 6.5 7 1-5 5 1.2 7L12 18l-6.2 3.5L7 14.5l-5-5 7-1z',
+  bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+  chat: 'M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 12.5 3 8.5 8.5 0 0 1 21 11.5z',
+  snag: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
+  copy: 'M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6',
+  sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
+  receipt: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1zM8 8h8M8 12h8M8 16h5',
 }
 export function Icon({ name, size = 22, stroke = 2, style }) {
   return (
@@ -67,7 +81,8 @@ export function TopBar({ title, sub, onBack, right }) {
   )
 }
 
-// Bottom sheet popup
+// Bottom sheet popup (drawn on top of the page; touches inside it don't reach the page behind)
+const stop = e => e.stopPropagation()
 export function Sheet({ open, onClose, title, children, full }) {
   useEffect(() => {
     if (!open) return
@@ -76,8 +91,9 @@ export function Sheet({ open, onClose, title, children, full }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
   if (!open) return null
-  return (
-    <div className="sheet-backdrop" onClick={onClose}>
+  return createPortal(
+    <div className="sheet-backdrop" onClick={e => { e.stopPropagation(); onClose() }}
+      onTouchStart={stop} onTouchMove={stop} onTouchEnd={stop} onPointerDown={stop} onPointerUp={stop} onPointerMove={stop}>
       <div className={'sheet' + (full ? ' full' : '')} onClick={e => e.stopPropagation()} role="dialog" aria-label={title}>
         <div className="sheet-handle" />
         <div className="sheet-head">
@@ -86,17 +102,18 @@ export function Sheet({ open, onClose, title, children, full }) {
         </div>
         <div className="sheet-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
 // A labelled input that saves when you leave it (or as you type when live)
-export function Field({ label, value, onChange, type = 'text', placeholder, multiline, inputMode, live = true }) {
+export function Field({ label, value, onChange, type = 'text', placeholder, multiline, inputMode, live = true, list }) {
   const [v, setV] = useState(value ?? '')
   useEffect(() => setV(value ?? ''), [value])
   const commit = val => { if ((val ?? '') !== (value ?? '')) onChange(val) }
   const props = {
-    value: v, placeholder, inputMode,
+    value: v, placeholder, inputMode, list,
     onChange: e => { setV(e.target.value); if (live && type === 'date') commit(e.target.value) },
     onBlur: e => commit(e.target.value),
   }
@@ -198,3 +215,90 @@ export function MonthCalendar({ items = [], onDay, range, compact, month, setMon
     </div>
   )
 }
+
+// Ask for a name (replaces the plain browser prompt)
+export function PromptSheet({ open, title, label, initial = '', placeholder, onSave, onClose, children, saveLabel = 'Save' }) {
+  const [v, setV] = useState(initial)
+  useEffect(() => { if (open) setV(initial) }, [open])
+  if (!open) return null
+  const go = () => { onSave(v.trim()); onClose() }
+  return (
+    <Sheet open onClose={onClose} title={title}>
+      <label className="field"><span>{label}</span>
+        <input autoFocus value={v} placeholder={placeholder} onChange={e => setV(e.target.value)} onKeyDown={e => e.key === 'Enter' && go()} />
+      </label>
+      {children}
+      <button className="btn primary wide big" onClick={go}>{saveLabel}</button>
+    </Sheet>
+  )
+}
+
+// Swipe right to tick, swipe left to show delete
+export function SwipeRow({ onTick, onDelete, children, className = '' }) {
+  const start = useRef(null)
+  const [dx, setDx] = useState(0)
+  const [open, setOpen] = useState(false)
+  const end = () => {
+    if (dx > 70 && onTick) { vibrate(); onTick() }
+    if (dx < -60 && onDelete) setOpen(true)
+    else if (dx > -10) setOpen(false)
+    setDx(0); start.current = null
+  }
+  return (
+    <div className={'swipe ' + className}>
+      <div className="swipe-bg tick-bg"><Icon name="check" size={20} stroke={3} /></div>
+      {onDelete && <button className="swipe-bg del-bg" onClick={() => { setOpen(false); onDelete() }}><Icon name="trash" size={20} /> Delete</button>}
+      <div className="swipe-front" style={{ transform: open || dx ? `translateX(${open ? -96 : dx}px)` : undefined, transition: start.current ? 'none' : 'transform .2s' }}
+        onTouchStart={e => { start.current = [e.touches[0].clientX, e.touches[0].clientY, false] }}
+        onTouchMove={e => {
+          if (!start.current) return
+          const x = e.touches[0].clientX - start.current[0], y = e.touches[0].clientY - start.current[1]
+          if (!start.current[2] && Math.abs(y) > Math.abs(x)) { start.current = null; return }
+          if (Math.abs(x) > 8) start.current[2] = true
+          if (start.current[2]) setDx(Math.max(onDelete ? -110 : 0, Math.min(onTick ? 110 : 0, x + (open ? -96 : 0))))
+        }}
+        onTouchEnd={end} onClick={() => open && setOpen(false)}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// Finger signature box. onChange gets a PNG data URL.
+export function SignaturePad({ onDone, onCancel, who = 'Client' }) {
+  const c = useRef(), drawing = useRef(false), drew = useRef(false)
+  const [name, setName] = useState('')
+  useEffect(() => {
+    const cv = c.current, r = cv.getBoundingClientRect()
+    cv.width = r.width * 2; cv.height = r.height * 2
+    const ctx = cv.getContext('2d'); ctx.scale(2, 2); ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.strokeStyle = '#1d3b2c'
+  }, [])
+  const pos = e => { const r = c.current.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top] }
+  return (
+    <div className="sig">
+      <label className="field"><span>{who} name</span><input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" /></label>
+      <span className="field-label">Sign below with a finger</span>
+      <canvas ref={c} className="sig-pad"
+        onPointerDown={e => { drawing.current = true; const ctx = c.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(...pos(e)); c.current.setPointerCapture(e.pointerId) }}
+        onPointerMove={e => { if (!drawing.current) return; const ctx = c.current.getContext('2d'); ctx.lineTo(...pos(e)); ctx.stroke(); drew.current = true }}
+        onPointerUp={() => { drawing.current = false }} />
+      <div className="sheet-actions">
+        <button className="btn ghost" onClick={() => { const cv = c.current; cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); drew.current = false }}>Clear</button>
+        {onCancel && <button className="btn ghost" onClick={onCancel}>Cancel</button>}
+        <button className="btn primary" onClick={() => {
+          if (!drew.current) return alert('Please sign in the box first')
+          if (!name.trim()) return alert('Please type the name too')
+          onDone({ signature: c.current.toDataURL('image/png'), name: name.trim(), at: new Date().toISOString() })
+        }}>Confirm signature</button>
+      </div>
+    </div>
+  )
+}
+
+// <datalist> of things typed before, for suggestions as you type
+export function Suggest({ id, values }) {
+  const uniq = [...new Set(values.filter(Boolean).map(v => String(v).trim()))].slice(0, 200)
+  return <datalist id={id}>{uniq.map(v => <option key={v} value={v} />)}</datalist>
+}
+
+export function Toast({ text }) { return text ? <div className="toast">{text}</div> : null }

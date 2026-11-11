@@ -1,10 +1,13 @@
-import { useRecord, update } from '../store'
-import { Icon, TopBar, Field, Empty } from '../ui'
+import { useState } from 'react'
+import { useRecord, update, useList } from '../store'
+import { Icon, TopBar, Field, Empty, PromptSheet } from '../ui'
 import { nav } from '../router'
 import { niceDate } from '../util'
+import { JOB_STATUS, jobProgress, saveTemplate, smallImage, jobStatus } from '../jobs'
+import { pickFile } from '../files'
 
 export const TABS = [
-  { key: '', label: 'Job', icon: 'info' },
+  { key: '', label: 'Overview', icon: 'info' },
   { key: 'docs', label: 'Documents', icon: 'docs' },
   { key: 'materials', label: 'Materials', icon: 'materials' },
   { key: 'money', label: 'Money', icon: 'money' },
@@ -53,13 +56,56 @@ function ProBox({ job, pro }) {
   )
 }
 
+function HubTile({ icon, label, onClick, badge, orange }) {
+  return (
+    <button className={'hub-tile' + (orange ? ' orange' : '')} onClick={onClick}>
+      {badge ? <span className="hub-badge">{badge}</span> : null}
+      <span className="hub-ic"><Icon name={icon} size={22} /></span>
+      {label}
+    </button>
+  )
+}
+
 export default function JobInfo({ id }) {
   const job = useRecord(id)
+  const extras = useList('extra', r => r.job_id === id && r.data.status === 'pending')
+  const snags = useList('snag', r => r.job_id === id && !r.data.done)
+  const photos = useList('photo', r => r.job_id === id)
+  const [tpl, setTpl] = useState(false)
   if (!job) return <JobShell job={null} />
   const d = job.data
   const set = patch => update(job.id, patch)
+  const prog = jobProgress(d)
+  const go = p => nav(`/job/${id}/${p}`)
+  const cover = async () => { const [f] = await pickFile({ accept: 'image/*' }); if (f) set({ cover: await smallImage(f, 900) }) }
   return (
     <JobShell job={job} tab="">
+      <div className="job-hero">
+        {d.cover && <img src={d.cover} alt="" onClick={cover} />}
+        <div className="job-hero-body">
+          <div className="status-row">
+            {Object.entries(JOB_STATUS).map(([k, l]) => (
+              <button key={k} className={'chip' + (jobStatus(d) === k ? ' on' : '')} onClick={() => set({ status: k })}>{l}</button>
+            ))}
+          </div>
+          {prog && <>
+            <div className="progress"><div style={{ width: prog.pct + '%' }} /></div>
+            <div className="small muted" style={{ marginTop: 6 }}>{prog.label}{d.finish ? ` · finishes ${niceDate(d.finish, { noYear: true })}` : ''}</div>
+          </>}
+          {!d.cover && <button className="btn ghost small" style={{ marginTop: 10 }} onClick={cover}><Icon name="camera" size={16} /> Add a cover photo</button>}
+        </div>
+      </div>
+
+      <div className="hub">
+        <HubTile icon="extra" label="Extras" badge={extras.length} orange onClick={() => go('extras')} />
+        <HubTile icon="camera" label="Photo diary" badge={0} onClick={() => go('photos')} />
+        <HubTile icon="snag" label="Snagging" badge={snags.length} onClick={() => go('snags')} />
+        <HubTile icon="clock" label="Hours" onClick={() => go('hours')} />
+        <HubTile icon="copy" label="Save as template" onClick={() => setTpl(true)} />
+        <HubTile icon="schedule" label="Schedule" onClick={() => go('schedule')} />
+      </div>
+      {photos.length > 0 && <p className="hint" style={{ marginTop: -4 }}>{photos.length} progress photo{photos.length > 1 ? 's' : ''} in the diary</p>}
+
       <section className="card">
         <div className="card-head"><h2>Job information</h2><span className="muted small">Created {niceDate(d.created)}</span></div>
         <Field label="Job name" value={d.name} onChange={v => set({ name: v })} />
@@ -74,6 +120,7 @@ export default function JobInfo({ id }) {
           <Field label="Finish date" type="date" value={d.finish} onChange={v => set({ finish: v })} />
         </div>
         {d.address && <a className="btn ghost" target="_blank" rel="noreferrer" href={`https://maps.google.com/?q=${encodeURIComponent(d.address)}`}>Open in maps</a>}
+        {d.cover && <button className="btn ghost" style={{ marginLeft: 8 }} onClick={() => set({ cover: '' })}>Remove cover photo</button>}
       </section>
       <section className="card">
         <div className="card-head"><h2>Professional services</h2></div>
@@ -83,6 +130,10 @@ export default function JobInfo({ id }) {
         <div className="card-head"><h2>Notes</h2></div>
         <Field label="Anything else about this job" value={d.notes} onChange={v => set({ notes: v })} multiline />
       </section>
+      <PromptSheet open={tpl} onClose={() => setTpl(false)} title="Save as a template" label="Template name" initial={d.name ? d.name + ' template' : ''}
+        placeholder="e.g. Kitchen fit" saveLabel="Save template" onSave={n => { saveTemplate(id, n || 'Template'); alert('Template saved. Pick it next time you make a new job.') }}>
+        <p className="small muted">This remembers this job's material folders and items, and the schedule, so your next similar job starts filled in.</p>
+      </PromptSheet>
     </JobShell>
   )
 }

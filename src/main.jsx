@@ -9,7 +9,13 @@ import Materials, { Folder } from './pages/Materials'
 import Money from './pages/Money'
 import Schedule from './pages/Schedule'
 import Invoices, { InvoiceEdit } from './pages/Invoices'
-import Settings, { SignIn } from './pages/Settings'
+import Settings, { SignIn, applyDisplay } from './pages/Settings'
+import Extras from './pages/Extras'
+import Photos from './pages/Photos'
+import Snags from './pages/Snags'
+import Hours from './pages/Hours'
+import Contacts, { Renewals } from './pages/Contacts'
+import Search from './pages/Search'
 import Share from './pages/Share'
 import VoiceButton from './Voice'
 
@@ -38,16 +44,24 @@ function App() {
       : sub === 'schedule' ? <Schedule id={jobId} />
       : sub === 'invoices' ? <Invoices id={jobId} />
       : sub === 'invoice' ? <InvoiceEdit id={jobId} iid={r[3]} />
+      : sub === 'extras' ? <Extras id={jobId} />
+      : sub === 'photos' ? <Photos id={jobId} />
+      : sub === 'snags' ? <Snags id={jobId} />
+      : sub === 'hours' ? <Hours id={jobId} />
       : <JobInfo id={jobId} />
   } else if (r[0] === 'settings') page = <Settings />
   else if (r[0] === 'share') page = <Share />
+  else if (r[0] === 'contacts') page = <Contacts />
+  else if (r[0] === 'renewals') page = <Renewals />
+  else if (r[0] === 'search') page = <Search />
   else page = <Home />
   return <>
     {page}
-    {r[0] !== 'settings' && r[0] !== 'share' && <VoiceButton jobId={jobId} />}
+    {!['settings', 'share', 'search'].includes(r[0]) && <VoiceButton jobId={jobId} />}
   </>
 }
 
+applyDisplay()
 initCloud()
 keepStorage()
 createRoot(document.getElementById('root')).render(<App />)

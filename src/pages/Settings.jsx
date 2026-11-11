@@ -3,6 +3,48 @@ import { put, useRecord, useStatus, cloudEnabled, signIn, signUp, signOut } from
 import { Icon, TopBar, Field } from '../ui'
 import { nav, back } from '../router'
 import { BackupCard } from '../Backup'
+import { accountantCsv } from './Money'
+import { shareOrDownload } from '../files'
+
+export function applyDisplay() {
+  const c = document.documentElement.classList
+  c.toggle('big-text', localStorage.getItem('pw_big') === '1')
+  c.toggle('contrast', localStorage.getItem('pw_contrast') === '1')
+}
+
+function Toggle({ k, label, sub }) {
+  const [on, setOn] = useState(localStorage.getItem(k) === '1')
+  return (
+    <div className="toggle-row">
+      <span><b>{label}</b>{sub && <><br /><span className="small muted">{sub}</span></>}</span>
+      <button className={'switch' + (on ? ' on' : '')} aria-pressed={on} onClick={() => { localStorage.setItem(k, on ? '0' : '1'); setOn(!on); applyDisplay() }} />
+    </div>
+  )
+}
+
+function taxYears() {
+  const d = new Date(), y = d.getMonth() > 3 || (d.getMonth() === 3 && d.getDate() >= 6) ? d.getFullYear() : d.getFullYear() - 1
+  return [y, y - 1, y - 2].map(s => ({ label: `${s}/${String(s + 1).slice(2)}`, from: `${s}-04-06`, to: `${s + 1}-04-05` }))
+}
+
+function AccountantCard() {
+  const years = taxYears()
+  const [i, setI] = useState(0)
+  const [msg, setMsg] = useState('')
+  return (
+    <section className="card">
+      <div className="card-head"><h2>For your accountant</h2></div>
+      <p className="small muted" style={{ marginTop: 0 }}>Makes a spreadsheet of every payment in and out across all jobs for the tax year, with VAT and CIS amounts. It opens in Excel or Google Sheets.</p>
+      <div className="chips" style={{ marginBottom: 12 }}>{years.map((y, j) => <button key={y.label} className={'chip' + (i === j ? ' on' : '')} onClick={() => setI(j)}>Tax year {y.label}</button>)}</div>
+      <button className="btn primary wide" onClick={async () => {
+        const { file, count } = accountantCsv(years[i].from, years[i].to)
+        const r = await shareOrDownload(file, 'Accounts')
+        setMsg(r === 'cancelled' ? '' : `${count} payments exported.${r === 'downloaded' ? ' Saved in Downloads.' : ''}`)
+      }}><Icon name="share" size={18} /> Send spreadsheet</button>
+      {msg && <p className="small muted" style={{ marginBottom: 0 }}>{msg}</p>}
+    </section>
+  )
+}
 
 export function useSettings() {
   const r = useRecord('settings')
@@ -68,6 +110,13 @@ export default function Settings() {
         </section>
 
         <BackupCard />
+        <AccountantCard />
+
+        <section className="card">
+          <div className="card-head"><h2>Easier to read</h2></div>
+          <Toggle k="pw_big" label="Bigger text" sub="Makes everything a bit larger" />
+          <Toggle k="pw_contrast" label="Stronger contrast" sub="Darker text and outlines, easier in sunlight" />
+        </section>
 
         <section className="card">
           <div className="card-head"><h2>The two owners</h2></div>

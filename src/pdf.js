@@ -15,7 +15,7 @@ export function buildPdf(inv, business) {
   const d = inv.data, b = business || {}
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const W = 210, M = 16
-  const navy = [31, 58, 95]
+  const navy = [47, 122, 87]
   let y = M
 
   // Header: logo left, business details right
@@ -61,7 +61,7 @@ export function buildPdf(inv, business) {
     head: [['Item', 'Location', 'Materials', 'Labour', 'Total']],
     body: lines.map(l => [l.item || '', l.location || '', money(num(l.materials)), money(num(l.labour)), money(num(l.materials) + num(l.labour))]),
     styles: { fontSize: 9.5, cellPadding: 2.6, textColor: 30, lineColor: [225, 230, 238], lineWidth: 0.2 },
-    headStyles: { fillColor: [238, 242, 248], textColor: navy, fontStyle: 'bold' },
+    headStyles: { fillColor: [230, 244, 236], textColor: navy, fontStyle: 'bold' },
     columnStyles: { 0: { cellWidth: 'auto' }, 1: { cellWidth: 34 }, 2: { halign: 'right', cellWidth: 26 }, 3: { halign: 'right', cellWidth: 26 }, 4: { halign: 'right', cellWidth: 28, fontStyle: 'bold' } },
   })
   y = doc.lastAutoTable.finalY + 6

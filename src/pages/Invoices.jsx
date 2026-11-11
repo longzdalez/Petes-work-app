@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { put, update, remove, useRecord, useList, list } from '../store'
-import { Icon, Field, Empty, confirmDelete } from '../ui'
+import { Icon, Field, Empty, confirmDelete, Sheet } from '../ui'
+import { whatsApp, shareText } from '../files'
+import { addExtrasToInvoice } from './Extras'
 import { JobShell } from './Job'
 import { nav } from '../router'
 import { money, num, niceDate, today, ymd } from '../util'
@@ -24,6 +26,57 @@ export function newInvoice(job, type) {
 }
 
 const STATUS = { draft: 'Draft', sent: 'Sent', paid: 'Paid', accepted: 'Accepted' }
+export const isOverdue = d => d.type === 'invoice' && d.status !== 'paid' && d.status !== 'draft' && d.due && d.due < today()
+const addDays = n => { const x = new Date(); x.setDate(x.getDate() + n); return ymd(x) }
+
+// Turn an accepted quote into one invoice, or into stage-payment invoices
+export function quoteToInvoice(quote, job) {
+  const inv = newInvoice(job, 'invoice')
+  update(inv.id, { lines: quote.data.lines, vatRate: quote.data.vatRate, notes: quote.data.notes, fromQuote: quote.data.number })
+  update(quote.id, { status: 'accepted' })
+  return inv
+}
+
+function StageSheet({ quote, job, onClose }) {
+  const t = invoiceTotals(quote.data)
+  const [stages, setStages] = useState([
+    { name: 'Deposit', pct: 25, due: today() },
+    { name: 'Stage payment', pct: 35, due: addDays(30) },
+    { name: 'Final payment', pct: 40, due: job.data.finish || addDays(60) },
+  ])
+  const total = stages.reduce((s, x) => s + num(x.pct), 0)
+  const setS = (i, p) => setStages(st => st.map((x, j) => j === i ? { ...x, ...p } : x))
+  const create = () => {
+    if (Math.round(total) !== 100) return alert(`The stages add up to ${total}%. Please make them add up to 100%.`)
+    stages.forEach((st, i) => {
+      const inv = newInvoice(job, 'invoice')
+      update(inv.id, {
+        due: st.due, vatRate: quote.data.vatRate, fromQuote: quote.data.number,
+        lines: [{ item: `${st.name} (${num(st.pct)}% of quote ${quote.data.number})`, location: '', materials: '', labour: (t.sub * num(st.pct) / 100).toFixed(2) }],
+        notes: `Stage ${i + 1} of ${stages.length} for quote ${quote.data.number}.`,
+      })
+    })
+    update(quote.id, { status: 'accepted' })
+    onClose(); nav(`/job/${job.id}/invoices`)
+  }
+  return (
+    <Sheet open onClose={onClose} title="Stage payments">
+      <p className="small muted" style={{ marginTop: 0 }}>Split quote {quote.data.number} ({money(t.total)}) into stage invoices. Each one is made ready to send on its date, and shows in Money as expected income.</p>
+      {stages.map((st, i) => (
+        <div key={i} className="stage-row">
+          <input value={st.name} onChange={e => setS(i, { name: e.target.value })} />
+          <input inputMode="decimal" value={st.pct} onChange={e => setS(i, { pct: e.target.value })} aria-label="Percent" />
+          <input type="date" value={st.due} onChange={e => setS(i, { due: e.target.value })} />
+          <button className="icon-btn small" onClick={() => setStages(s => s.filter((_, j) => j !== i))} aria-label="Remove"><Icon name="close" size={16} /></button>
+        </div>
+      ))}
+      <button className="add-line" onClick={() => setStages(s => [...s, { name: 'Stage payment', pct: 0, due: addDays(45) }])}><Icon name="plus" size={18} /> Add a stage</button>
+      <div className="kv"><span>Adds up to</span><b className={Math.round(total) === 100 ? 'pos' : 'neg'}>{total}%</b></div>
+      <button className="btn primary wide big" style={{ marginTop: 12 }} onClick={create}>Create {stages.length} invoices</button>
+    </Sheet>
+  )
+}
+
 
 export default function Invoices({ id }) {
   const job = useRecord(id)
@@ -48,7 +101,7 @@ export default function Invoices({ id }) {
               </div>
               <div className="r">
                 <div className="inv-total">{money(t.total)}</div>
-                <span className={'status ' + (i.data.status || 'draft')}>{STATUS[i.data.status || 'draft']}</span>
+                {isOverdue(i.data) ? <span className="status overdue">Overdue</span> : <span className={'status ' + (i.data.status || 'draft')}>{STATUS[i.data.status || 'draft']}</span>}
               </div>
             </div>
           )
@@ -63,6 +116,8 @@ export function InvoiceEdit({ id, iid }) {
   const settings = useSettings()
   const [busy, setBusy] = useState(false)
   const [preview, setPreview] = useState(null)
+  const [staging, setStaging] = useState(false)
+  const unbilled = useList('extra', r => r.job_id === id && r.data.status === 'approved' && !r.data.invoiced)
   useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview])
   if (!inv) return <JobShell job={job} tab="invoices" title="Invoice" onBack={() => nav(`/job/${id}/invoices`)}><Empty title="This invoice was deleted" /></JobShell>
   const d = inv.data
@@ -100,6 +155,24 @@ export function InvoiceEdit({ id, iid }) {
         <button className="btn ghost" onClick={() => download(pdfFile(inv, settings.business))}><Icon name="download" size={18} /> Save PDF</button>
         <button className="btn ghost" onClick={() => setPreview(URL.createObjectURL(pdfFile(inv, settings.business)))}>Preview</button>
       </div>
+      {isOverdue(d) && <div className="notice" style={{ marginBottom: 14 }}>
+        <b>Overdue by {Math.round((new Date(today()) - new Date(d.due)) / 864e5)} days.</b> Send the client a friendly reminder:
+        <button className="btn orange wide" style={{ marginTop: 10 }} onClick={() => {
+          const msg = `Hi${d.clientName ? ' ' + d.clientName.split(' ')[0] : ''}, just a friendly reminder that ${label.toLowerCase()} ${d.number} for ${money(t.total)} was due on ${niceDate(d.due)}. ${settings.business.bankName ? `Bank details: ${settings.business.bankName}, sort code ${settings.business.sortCode}, account ${settings.business.accountNo}. ` : ''}Thanks, ${settings.business.name || ''}`.trim()
+          d.clientPhone ? whatsApp(d.clientPhone, msg) : shareText(msg, 'Payment reminder')
+          set({ reminded: today() })
+        }}><Icon name="chat" size={18} /> Send reminder on WhatsApp</button>
+        {d.reminded && <div className="small" style={{ marginTop: 6 }}>Last reminder sent {niceDate(d.reminded)}</div>}
+      </div>}
+      {d.type === 'quote' && d.status !== 'accepted' && <section className="card">
+        <div className="card-head"><h2>Client accepted?</h2></div>
+        <div className="two">
+          <button className="btn primary" onClick={() => { const i = quoteToInvoice(inv, job); nav(`/job/${id}/invoice/${i.id}`) }}>Turn into invoice</button>
+          <button className="btn ghost" onClick={() => setStaging(true)}>Stage payments</button>
+        </div>
+      </section>}
+      {d.type === 'invoice' && unbilled.length > 0 && d.status !== 'paid' && <button className="btn soft-orange wide" style={{ marginBottom: 14 }} onClick={() => addExtrasToInvoice(id, iid)}><Icon name="extra" size={18} /> Add {unbilled.length} approved extra{unbilled.length > 1 ? 's' : ''} to this invoice</button>}
+      {staging && <StageSheet quote={inv} job={job} onClose={() => setStaging(false)} />}
       {preview && <div className="card"><iframe title="Preview" className="pdf-preview" src={preview} /><button className="btn ghost wide" onClick={() => window.open(preview)}>Open full screen</button></div>}
       {!settings.business.name && <p className="notice small">Your business name, logo and bank details aren't added yet. <a href="#/settings">Add them in Settings</a> and they'll appear on every invoice.</p>}
 
