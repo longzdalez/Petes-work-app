@@ -1,4 +1,6 @@
-# Pete Work
+# BP Builders (was "Pete Work")
+
+New to this code? Read [HANDOVER.md](HANDOVER.md) first.
 
 A phone app (installable web app) for running building jobs: job list and to-dos, job details, documents, materials checklists with an urgency calendar, money in/out with a forecast, a build schedule, and invoices/quotes as PDFs. Works on any Android phone, including ones without Google services.
 
