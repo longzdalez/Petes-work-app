@@ -409,3 +409,17 @@ a { color: var(--g700); }
 .todo-date-row input { min-height: 38px; border: 1.5px solid var(--line); border-radius: 99px; padding: 0 12px; background: #fbfdfc; }
 .todo-cal { margin-top: 14px; }
 .voice-where { display: inline-flex; align-items: center; gap: 6px; background: var(--g100); color: var(--g700); font-weight: 800; font-size: 13px; padding: 5px 12px; border-radius: 99px; margin-bottom: 4px; }
+.logo { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.logo-mark { width: 44px; height: 44px; flex-shrink: 0; filter: drop-shadow(0 3px 8px rgba(20, 60, 40, .25)); }
+.logo-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.logo-name { font-size: 22px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
+.logo-name b { font-weight: 900; }
+.logo-sub { font-size: 13px; font-weight: 600; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.logo.big { flex-direction: column; text-align: center; gap: 10px; color: var(--g700); margin-bottom: 6px; }
+.logo.big .logo-mark { width: 92px; height: 92px; }
+.logo.big .logo-name { font-size: 30px; }
+.logo.big .logo-sub { color: var(--muted); font-size: 14px; }
+.todo-urg { width: 28px; height: 28px; border-radius: 10px; border: 1.5px solid #cfdcd4; background: #fff; flex-shrink: 0; }
+.remind-prompt { display: flex; align-items: center; gap: 8px; background: var(--g100); border-radius: 16px; padding: 8px 8px 8px 14px; margin-top: 8px; }
+.remind-prompt > span { flex: 1; min-width: 0; }
+.remind-prompt .btn { flex: 0 0 auto; padding-left: 16px; padding-right: 16px; }

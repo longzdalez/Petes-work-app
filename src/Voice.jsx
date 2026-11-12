@@ -47,19 +47,31 @@ export default function VoiceButton({ ctx }) {
     setCmd(c)
   }, [text, page, ctx.folderId])
 
-  const listen = () => {
-    if (!SR) return
+  // Keep listening until the microphone is tapped again. Phones stop after a pause, so we quietly start again.
+  const want = useRef(false), base = useRef(''), textRef = useRef('')
+  useEffect(() => { textRef.current = text }, [text])
+  const run = () => {
     try {
       const r = new SR()
-      r.lang = 'en-GB'; r.interimResults = true; r.continuous = false
-      r.onresult = e => setText([...e.results].map(x => x[0].transcript).join(' '))
-      r.onend = () => setListening(false)
-      r.onerror = () => setListening(false)
+      r.lang = 'en-GB'; r.interimResults = true; r.continuous = true
+      r.onresult = e => setText((base.current + [...e.results].map(x => x[0].transcript).join(' ')).replace(/\s+/g, ' ').trimStart())
+      r.onend = () => {
+        if (want.current) { base.current = textRef.current ? textRef.current.trim() + ' ' : ''; setTimeout(() => want.current && run(), 250) }
+        else setListening(false)
+      }
+      r.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { want.current = false; setListening(false) } }
       rec.current = r; r.start(); setListening(true)
-    } catch { setListening(false) }
+    } catch { if (!want.current) setListening(false) }
   }
+  const listen = () => {
+    if (!SR) return
+    want.current = true
+    base.current = textRef.current ? textRef.current.trim() + ' ' : ''
+    run()
+  }
+  const stopListening = () => { want.current = false; rec.current?.stop?.(); setListening(false) }
   const start = () => { setText(''); setDone(''); setOpen(true); if (SR) setTimeout(listen, 150) }
-  const close = () => { rec.current?.abort?.(); setOpen(false); setListening(false) }
+  const close = () => { want.current = false; rec.current?.abort?.(); setOpen(false); setListening(false) }
 
   const findFolder = name => {
     const folders = list('folder', r => r.job_id === job).sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0))
@@ -74,8 +86,8 @@ export default function VoiceButton({ ctx }) {
     const c = cmd
     if (!c || (!c.text && !['money', 'hours'].includes(c.kind))) return
     const J = { job_id: job }
-    if (c.kind === 'todo') put('todo', { text: c.text, date: c.date || today(), done: false }, { job_id: null })
-    if (c.kind === 'jobtodo') put('todo', { text: c.text, date: c.date || today(), done: false }, J)
+    if (c.kind === 'todo') put('todo', { text: c.text, date: c.date || today(), urgency: c.urgency || '', done: false }, { job_id: null })
+    if (c.kind === 'jobtodo') put('todo', { text: c.text, date: c.date || today(), urgency: c.urgency || '', done: false }, J)
     if (c.kind === 'task') put('task', { text: c.text, date: c.date || today(), urgency: c.urgency || 'green', done: false }, J)
     if (c.kind === 'money') put('money', { dir: c.dir, amount: c.amount, desc: c.desc, cat: c.cat, date: today(), status: 'paid' }, J)
     if (c.kind === 'extra') put('extra', { text: c.text, location: '', materials: '', labour: c.price ? String(c.price) : '', notes: '', status: 'pending' }, J)
@@ -90,6 +102,7 @@ export default function VoiceButton({ ctx }) {
       put('material', { folder_id: f.id, text: c.text, date: c.date || '', urgency: c.urgency || '', done: false, order: n }, J)
     }
     setDone(`Saved: ${KINDS[c.kind]}`)
+    base.current = ''
     setText('')
   }
   const needsJob = cmd && cmd.kind !== 'todo' && !ctx.jobId
@@ -109,9 +122,9 @@ export default function VoiceButton({ ctx }) {
         <div className="voice">
           {ctx.jobId && <div className="voice-where"><Icon name="info" size={14} /> {get(ctx.jobId)?.data.name}{folder ? ` › ${folder.data.name}` : ''}</div>}
           {SR
-            ? <button className={'mic-big' + (listening ? ' on' : '')} onClick={listening ? () => rec.current?.stop() : listen}><Icon name="mic" size={34} /></button>
+            ? <button className={'mic-big' + (listening ? ' on' : '')} onClick={listening ? stopListening : listen} aria-label={listening ? 'Stop recording' : 'Start recording'}><Icon name="mic" size={34} /></button>
             : <p className="small muted">Tap the box below, then press the <b>microphone on your keyboard</b> and speak.</p>}
-          <p className="small muted">{listening ? 'Listening…' : SR ? 'Tap the microphone and speak, or type below.' : ''}</p>
+          <p className="small muted">{listening ? <b style={{ color: 'var(--g700)' }}>Recording. Take your time, then tap the microphone again to stop.</b> : SR ? 'Tap the microphone to start recording, or type below.' : ''}</p>
           <textarea rows={2} value={text} onChange={e => setText(e.target.value)} placeholder={'e.g. ' + cfg.hint} />
           {done && !text && <p className="saved"><Icon name="check" size={18} /> {done}. Say another or close.</p>}
           {cmd && (
@@ -120,8 +133,8 @@ export default function VoiceButton({ ctx }) {
                 {kinds.map(k => <button key={k} className={'chip' + (cmd.kind === k ? ' on' : '')} onClick={() => setKind(k)}>{KINDS[k]}</button>)}
               </div>}
               <div className="voice-summary">
-                {cmd.kind === 'todo' && <>To-do: <b>{cmd.text}</b>{cmd.date && <> on {niceDate(cmd.date, { noYear: true })}</>}</>}
-                {cmd.kind === 'jobtodo' && <>Job to-do: <b>{cmd.text}</b>{cmd.date && <> on {niceDate(cmd.date, { noYear: true })}</>}</>}
+                {cmd.kind === 'todo' && <>{cmd.urgency && <UrgencyDot value={cmd.urgency} size={14} />} To-do: <b>{cmd.text}</b>{cmd.date && <> on {niceDate(cmd.date, { noYear: true })}</>}</>}
+                {cmd.kind === 'jobtodo' && <>{cmd.urgency && <UrgencyDot value={cmd.urgency} size={14} />} Job to-do: <b>{cmd.text}</b>{cmd.date && <> on {niceDate(cmd.date, { noYear: true })}</>}</>}
                 {cmd.kind === 'material' && <><UrgencyDot value={cmd.urgency} size={14} /> <b>{cmd.text}</b> in <b>{where}</b>{cmd.date ? <>, needed {niceDate(cmd.date)}</> : ', no date'}{cmd.urgency && <> ({URGENCY[cmd.urgency].label.toLowerCase()})</>}</>}
                 {cmd.kind === 'task' && <><UrgencyDot value={cmd.urgency} size={14} /> <b>{cmd.text}</b> on {niceDate(cmd.date, { weekday: true })}</>}
                 {cmd.kind === 'money' && <>Money {cmd.dir}: <b>{money(cmd.amount)}</b> {cmd.desc}</>}

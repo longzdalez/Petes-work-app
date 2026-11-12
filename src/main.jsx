@@ -18,6 +18,8 @@ import Contacts, { Renewals } from './pages/Contacts'
 import Search from './pages/Search'
 import Share from './pages/Share'
 import VoiceButton from './Voice'
+import { Logo } from './ui'
+import { startReminders } from './reminders'
 
 function App() {
   const r = useRoute()
@@ -26,8 +28,7 @@ function App() {
   if (cloudEnabled && !st.signedIn && r[0] !== 'settings') {
     return (
       <div className="page welcome">
-        <div className="welcome-logo">PW</div>
-        <h1>Pete Work</h1>
+        <Logo big />
         <p className="muted">Jobs, materials, money and invoices in one place.</p>
         <div className="card"><SignIn /></div>
       </div>
@@ -65,6 +66,7 @@ function App() {
 applyDisplay()
 initCloud()
 keepStorage()
+startReminders()
 createRoot(document.getElementById('root')).render(<App />)
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

@@ -47,7 +47,7 @@ export default function Schedule({ id }) {
   if (!job) return <JobShell job={null} />
   const d = job.data
   const items = [...tasks.map(t => ({ date: t.data.date, text: t.data.text, color: URGENCY[t.data.urgency]?.color, done: t.data.done })),
-    ...todos.map(t => ({ date: t.data.date, text: '☐ ' + t.data.text, color: TODO_COLOUR, done: t.data.done }))]
+    ...todos.map(t => ({ date: t.data.date, text: '☐ ' + t.data.text, color: URGENCY[t.data.urgency]?.color || TODO_COLOUR, done: t.data.done }))]
   const weeks = d.start && d.finish ? Math.max(1, Math.round((parseYmd(d.finish) - parseYmd(d.start)) / 864e5 / 7 * 10) / 10) : null
   const next = tasks.filter(t => !t.data.done && t.data.date >= today()).slice(0, 6)
   return (

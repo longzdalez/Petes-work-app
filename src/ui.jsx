@@ -302,3 +302,23 @@ export function Suggest({ id, values }) {
 }
 
 export function Toast({ text }) { return text ? <div className="toast">{text}</div> : null }
+
+// BP Builders logo: a roof over the letters, in the app's greens with an orange chimney
+export function Logo({ big }) {
+  return (
+    <div className={'logo' + (big ? ' big' : '')}>
+      <svg className="logo-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#ffffff" /><stop offset="1" stopColor="#e6f4ec" /></linearGradient></defs>
+        <rect x="2" y="2" width="44" height="44" rx="14" fill="url(#lg)" />
+        <rect x="31" y="9" width="5" height="9" rx="1.5" fill="#ff9f55" />
+        <path d="M8 23 L24 10 L40 23" fill="none" stroke="#2f7a57" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        <text x="24" y="38" textAnchor="middle" fontFamily="Nunito, system-ui, sans-serif" fontWeight="900" fontSize="15" fill="#2f7a57" letterSpacing="0.5">BP</text>
+      </svg>
+      <div className="logo-text">
+        <span className="logo-name">BP <b>Builders</b></span>
+        {!big && <span className="logo-sub">{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span>}
+        {big && <span className="logo-sub">Jobs, materials, money and invoices</span>}
+      </div>
+    </div>
+  )
+}

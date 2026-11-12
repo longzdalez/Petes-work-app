@@ -79,7 +79,7 @@ export default function Docs({ id }) {
         <input ref={input} type="file" multiple hidden onChange={onFiles} />
       </div>
       {docs.length === 0
-        ? <Empty icon="docs" title="No documents yet" text="Press Add to pick files, photos or PDFs from your phone. You can also share straight from WhatsApp or email: press Share, then choose Pete Work." />
+        ? <Empty icon="docs" title="No documents yet" text="Press Add to pick files, photos or PDFs from your phone. You can also share straight from WhatsApp or email: press Share, then choose BP Builders." />
         : <div className="doc-grid">{docs.map(d => <DocTile key={d.id} doc={d} onLong={d => setSel(d.id)} />)}</div>}
       {selDoc && (
         <Sheet open onClose={() => setSel(null)} title="Document">

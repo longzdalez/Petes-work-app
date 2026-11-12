@@ -1,4 +1,4 @@
-const CACHE = 'pete-work-v5';
+const CACHE = 'pete-work-v6';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icons/icon-192.png'];
 
 self.addEventListener('install', e => {
@@ -46,3 +46,38 @@ self.addEventListener('fetch', e => {
     })));
   }
 });
+
+// Daily background check for urgent reminders (Android Chrome, installed app)
+function readDue() {
+  return new Promise(res => {
+    const q = indexedDB.open('pete-reminders', 1)
+    q.onupgradeneeded = () => q.result.createObjectStore('kv')
+    q.onsuccess = () => {
+      const tx = q.result.transaction('kv', 'readwrite'), st = tx.objectStore('kv')
+      const g = st.get('due'), s2 = st.get('sent')
+      tx.oncomplete = () => res({ due: g.result || [], sent: s2.result || {}, db: q.result })
+    }
+    q.onerror = () => res({ due: [], sent: {} })
+  })
+}
+self.addEventListener('periodicsync', e => {
+  if (e.tag !== 'reminders') return
+  e.waitUntil((async () => {
+    const { due, sent, db } = await readDue()
+    const today = new Date().toISOString().slice(0, 10)
+    for (const it of due) {
+      if (sent[it.id + today]) continue
+      await self.registration.showNotification(it.title, { body: it.body, tag: it.id, icon: 'icons/icon-192.png', data: { url: it.url } })
+      sent[it.id + today] = 1
+    }
+    if (db) db.transaction('kv', 'readwrite').objectStore('kv').put(sent, 'sent')
+  })())
+})
+self.addEventListener('notificationclick', e => {
+  e.notification.close()
+  const url = new URL(e.notification.data?.url || './', self.registration.scope).href
+  e.waitUntil(self.clients.matchAll({ type: 'window' }).then(cs => {
+    for (const c of cs) { if ('focus' in c) { c.navigate(url); return c.focus() } }
+    return self.clients.openWindow(url)
+  }))
+})

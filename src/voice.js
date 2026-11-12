@@ -67,8 +67,9 @@ export function parseCommand(raw) {
 
   // To-do
   if ((m = s.match(/^(?:add\s+)?(?:a\s+)?(?:to[\s-]?do|reminder|remind me to|remind me)\s*(?:list)?\s*[:,]?\s*(.+)$/i))) {
-    let [rest, date] = takeDate(m[1])
-    return { kind: 'todo', text: cap(clean(rest)), date: date || today() }
+    let [r0, urg] = takeUrgency(m[1])
+    let [rest, date] = takeDate(r0)
+    return { kind: 'todo', text: cap(clean(rest)), date: date || today(), urgency: urg }
   }
   // Money
   if ((m = low.match(/^(?:money in|received|we received|got paid|payment in|paid in)\s+(?:of\s+)?£?\s*([\d,]+(?:\.\d+)?)\s*(?:pounds?|quid)?\s*(?:from|for)?\s*(.*)$/))) {
@@ -96,8 +97,9 @@ export function parseCommand(raw) {
     }
   }
   // Fall back: to-do
-  let [rest, date] = takeDate(s)
-  return { kind: 'todo', text: cap(clean(rest)), date: date || today() }
+  let [r0, urg] = takeUrgency(s)
+  let [rest, date] = takeDate(r0)
+  return { kind: 'todo', text: cap(clean(rest)), date: date || today(), urgency: urg }
 }
 
 // ---- Understanding speech based on the page that's open ----

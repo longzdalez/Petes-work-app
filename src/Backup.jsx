@@ -16,7 +16,7 @@ function download(file) {
 async function shareFile(file) {
   const txt = new File([file], file.name.replace(/\.json$/, '.txt'), { type: 'text/plain' })
   if (navigator.canShare && navigator.canShare({ files: [txt] })) {
-    await navigator.share({ files: [txt], title: 'Pete Work backup', text: 'Pete Work backup. Keep this file safe.' })
+    await navigator.share({ files: [txt], title: 'BP Builders backup', text: 'BP Builders backup. Keep this file safe.' })
     return true
   }
   return false

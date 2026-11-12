@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { put, update, removeDeep, useList, useStatus, cloudEnabled, list } from '../store'
-import { Icon, Sheet, Field, TopBar, Empty, useLongPress, confirmDelete, SwipeRow } from '../ui'
+import { Icon, Sheet, Field, TopBar, Empty, useLongPress, confirmDelete, SwipeRow, Logo } from '../ui'
 import { niceDate, today, initials, money, parseYmd, ymd, shortDate } from '../util'
 import { nav } from '../router'
 import { BackupReminder } from '../Backup'
@@ -10,6 +10,7 @@ import { invoiceTotals } from '../pdf'
 import { extraTotal } from './Extras'
 import { daysUntil } from './Contacts'
 import { TodoList } from '../Todos'
+import { canNotify, remindersOn, enableReminders } from '../reminders'
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -94,6 +95,7 @@ function JobCard({ job, onLong }) {
 // Everything that needs attention across every job
 function TodayCard() {
   useList('job')
+  const [remindersPrompt, setRP] = useState(() => canNotify() && !remindersOn() && localStorage.getItem('pw_notify_ask') !== 'no')
   const t = today()
   const plus = n => { const d = parseYmd(t); d.setDate(d.getDate() + n); return ymd(d) }
   const jobs = Object.fromEntries(list('job').map(j => [j.id, j]))
@@ -126,7 +128,13 @@ function TodayCard() {
   return (
     <section className="card today-card">
       <div className="card-head"><h2>Today</h2><span className="pill orange">{new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
-      {groups.length === 0 && <div className="all-clear"><Icon name="check" size={18} /> Nothing urgent. All clear.</div>}
+      <p className="small muted" style={{ margin: '-4px 0 10px' }}>This fills itself in from all your jobs: work planned for today, materials to order, job to-dos, money due, extras waiting and renewals. You don't add to it directly.</p>
+      {groups.length === 0 && <div className="all-clear"><Icon name="check" size={18} /> Nothing needs you today.</div>}
+      {remindersPrompt && <div className="remind-prompt">
+        <span className="small"><b>Get a phone reminder</b> 2 days before anything marked urgent.</span>
+        <button className="btn primary small" onClick={async () => { try { await enableReminders(); setRP(false) } catch (e) { alert(e.message) } }}>Turn on</button>
+        <button className="icon-btn small" onClick={() => { localStorage.setItem('pw_notify_ask', 'no'); setRP(false) }} aria-label="Not now"><Icon name="close" size={16} /></button>
+      </div>}
       {groups.map(g => (
         <div key={g.title} className="today-group">
           <h3>{g.title}</h3>
@@ -154,7 +162,7 @@ export default function Home() {
   const editJob = jobs.find(j => j.id === editing)
   return (
     <div className="page">
-      <TopBar title="Pete Work" sub={new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+      <TopBar title={<Logo />}
         right={<>
           <button className="icon-btn" onClick={() => nav('/search')} aria-label="Search"><Icon name="search" /></button>
           <button className="icon-btn" onClick={() => nav('/settings')} aria-label="Settings">

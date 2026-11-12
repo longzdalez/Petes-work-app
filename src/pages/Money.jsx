@@ -6,6 +6,7 @@ import { money, num, today, shortDate, niceDate } from '../util'
 import { useSettings } from './Settings'
 import { storeFile, pickFile, openPath, shareOrDownload } from '../files'
 import { invoiceTotals } from '../pdf'
+import { readReceipt } from '../receipt'
 import { nav } from '../router'
 
 export const cisDeduction = d => d.cat === 'contractor' && num(d.cisRate) ? Math.round(num(d.cisLabour || d.amount) * num(d.cisRate)) / 100 : 0
@@ -21,7 +22,7 @@ export function accountantCsv(from, to) {
   const totOut = rows.filter(r => r.data.dir === 'out').reduce((s, r) => s + num(r.data.amount), 0)
   body.push([], ['', '', '', '', '', 'Total in', totIn.toFixed(2)], ['', '', '', '', '', 'Total out', totOut.toFixed(2)], ['', '', '', '', '', 'Profit', (totIn - totOut).toFixed(2)])
   const csv = [head, ...body].map(r => r.map(esc).join(',')).join('\r\n')
-  return { file: new File([csv], `Pete Work accounts ${from} to ${to}.csv`, { type: 'text/csv' }), count: rows.length }
+  return { file: new File([csv], `BP Builders accounts ${from} to ${to}.csv`, { type: 'text/csv' }), count: rows.length }
 }
 
 const CATS_IN = [{ k: 'client', l: 'Client payment' }, { k: 'other', l: 'Other' }]
@@ -34,6 +35,7 @@ function EntrySheet({ entry, jobId, onClose, owners }) {
   const [d, setD] = useState({ dir: 'in', cat: 'client', date: today(), status: 'paid', amount: '', desc: '', person: '', ...entry.data })
   const set = p => setD(x => ({ ...x, ...p }))
   const [busy, setBusy] = useState(false)
+  const [read, setRead] = useState(entry.read || '')
   const cats = d.dir === 'in' ? CATS_IN : CATS_OUT
   const save = () => {
     if (!num(d.amount)) return alert('Please put in an amount')
@@ -70,11 +72,18 @@ function EntrySheet({ entry, jobId, onClose, owners }) {
         <button className="receipt-pick" onClick={async () => {
           if (d.receipt) return openPath(d.receipt.path)
           const [f] = await pickFile({ accept: 'image/*', capture: 'environment' }); if (!f) return
-          setBusy(true); const st = await storeFile(f, `${jobId}/receipts`); set({ receipt: { path: st.path, thumb: st.thumb } }); setBusy(false)
+          setBusy('Saving photo…'); const st = await storeFile(f, `${jobId}/receipts`); set({ receipt: { path: st.path, thumb: st.thumb } })
+          try {
+            const r = await readReceipt(f, setBusy)
+            setD(x => ({ ...x, amount: x.amount || (r.total ? r.total.toFixed(2) : ''), vat: x.vat || (r.vat ? r.vat.toFixed(2) : ''), desc: x.desc || r.shop, date: r.date || x.date }))
+            setRead(r.total ? `Read from the receipt: total ${money(r.total)}${r.vat ? `, VAT ${money(r.vat)}` : ', no VAT found'}. Please check.` : "Couldn't read the total. Please type it in.")
+          } catch (e) { setRead("Couldn't read the receipt. Please type the amount in.") }
+          setBusy(false)
         }}>
           {d.receipt ? <img src={d.receipt.thumb} alt="" /> : <Icon name="receipt" />}
-          <span>{busy ? 'Saving photo…' : d.receipt ? 'Receipt saved (tap to view)' : 'Take a photo of the receipt'}</span>
+          <span>{busy || (d.receipt ? 'Receipt saved (tap to view)' : 'Take a photo of the receipt and I\'ll read it')}</span>
         </button>
+        {read && <p className="notice small" style={{ marginTop: -4 }}>{read}</p>}
         {d.receipt && <button className="btn ghost small" style={{ marginTop: -6, marginBottom: 12 }} onClick={() => set({ receipt: null })}>Remove receipt</button>}
         <div className="two">
           <label className="field"><span>VAT included £</span><input inputMode="decimal" value={d.vat || ''} onChange={e => set({ vat: e.target.value })} placeholder="0.00" /></label>
@@ -148,6 +157,20 @@ export default function Money({ id }) {
   const owners = settings.owners
   const entries = useList('money', r => r.job_id === id, byDate)
   const [edit, setEdit] = useState(null)
+  const [scanning, setScanning] = useState('')
+  // Photo of a receipt: read the total and VAT, then open a filled-in entry to check and save
+  const scan = async () => {
+    const [f] = await pickFile({ accept: 'image/*', capture: 'environment' }); if (!f) return
+    setScanning('Saving photo…')
+    const st = await storeFile(f, `${id}/receipts`)
+    let r = {}
+    try { r = await readReceipt(f, setScanning) } catch { }
+    setScanning('')
+    setEdit({
+      data: { dir: 'out', cat: 'materials', status: 'paid', amount: r.total ? r.total.toFixed(2) : '', vat: r.vat ? r.vat.toFixed(2) : '', desc: r.shop || '', date: r.date || today(), receipt: { path: st.path, thumb: st.thumb } },
+      read: r.total ? `Read from the receipt: total ${money(r.total)}${r.vat ? `, VAT ${money(r.vat)}` : ', no VAT found'}. Please check it's right, then Save.` : "Couldn't read the total on this one. Please type it in.",
+    })
+  }
   const paid = entries.filter(e => e.data.status !== 'upcoming')
   const invs = useList('invoice', r => r.job_id === id && r.data.type === 'invoice' && r.data.status !== 'paid' && r.data.due)
   const upcoming = [...entries.filter(e => e.data.status === 'upcoming'),
@@ -176,7 +199,11 @@ export default function Money({ id }) {
       </div>
       <div className={'stat profit ' + (profit >= 0 ? 'pos' : 'neg')}><span>Profit so far</span><b>{money(profit)}</b></div>
 
-      <button className="btn primary wide big" onClick={() => setEdit({ data: {} })}><Icon name="plus" size={20} /> Add money in or out</button>
+      <div className="two">
+        <button className="btn primary big" onClick={() => setEdit({ data: {} })}><Icon name="plus" size={20} /> Add money</button>
+        <button className="btn orange big" disabled={!!scanning} onClick={scan}><Icon name="receipt" size={20} /> {scanning ? 'Reading…' : 'Scan receipt'}</button>
+      </div>
+      {scanning && <p className="notice small" style={{ marginTop: -4 }}>{scanning} The first scan takes a little longer while the reader loads.</p>}
 
       <section className="card">
         <div className="card-head"><h2>Payments</h2></div>

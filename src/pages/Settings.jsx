@@ -5,6 +5,28 @@ import { nav, back } from '../router'
 import { BackupCard } from '../Backup'
 import { accountantCsv } from './Money'
 import { shareOrDownload } from '../files'
+import { canNotify, remindersOn, enableReminders, disableReminders } from '../reminders'
+
+function RemindersCard() {
+  const [on, setOn] = useState(remindersOn())
+  const [err, setErr] = useState('')
+  return (
+    <section className="card">
+      <div className="card-head"><h2>Reminders</h2></div>
+      <div className="toggle-row">
+        <span><b>Urgent reminders</b><br /><span className="small muted">A phone notification 2 days before any material, to-do or schedule item marked red (urgent)</span></span>
+        <button className={'switch' + (on ? ' on' : '')} aria-pressed={on} disabled={!canNotify()} onClick={async () => {
+          setErr('')
+          if (on) { disableReminders(); setOn(false); return }
+          try { await enableReminders(); setOn(true) } catch (e) { setErr(e.message) }
+        }} />
+      </div>
+      {!canNotify() && <p className="small muted">This phone's browser can't show reminders. Open the app in Chrome to use them.</p>}
+      {err && <p className="error">{err}</p>}
+      <p className="small muted" style={{ marginBottom: 0 }}>Reminders appear when you open the app, and on most Android phones once or twice a day in the background as well.</p>
+    </section>
+  )
+}
 
 export function applyDisplay() {
   const c = document.documentElement.classList
@@ -110,6 +132,7 @@ export default function Settings() {
         </section>
 
         <BackupCard />
+        <RemindersCard />
         <AccountantCard />
 
         <section className="card">
@@ -156,10 +179,10 @@ export default function Settings() {
           <ol className="small steps">
             <li>Open this page in <b>Chrome</b> (or the Huawei browser).</li>
             <li>Tap the <b>⋮ menu</b>, then <b>Add to Home screen</b> or <b>Install app</b>.</li>
-            <li>Open Pete Work from the new icon. To add files from WhatsApp or email, press <b>Share</b> on the file and choose <b>Pete Work</b>.</li>
+            <li>Open BP Builders from the new icon. To add files from WhatsApp or email, press <b>Share</b> on the file and choose <b>BP Builders</b>.</li>
           </ol>
         </section>
-        <p className="hint">Pete Work · version 1.0</p>
+        <p className="hint">BP Builders · version 1.0</p>
       </main>
     </div>
   )
