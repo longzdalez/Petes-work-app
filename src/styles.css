@@ -423,3 +423,50 @@ a { color: var(--g700); }
 .remind-prompt { display: flex; align-items: center; gap: 8px; background: var(--g100); border-radius: 16px; padding: 8px 8px 8px 14px; margin-top: 8px; }
 .remind-prompt > span { flex: 1; min-width: 0; }
 .remind-prompt .btn { flex: 0 0 auto; padding-left: 16px; padding-right: 16px; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.kv.owed { padding: 8px 0; }
+.kv.owed .tap { flex: 1; min-width: 0; user-select: none; -webkit-user-select: none; }
+/* Trades on the schedule */
+.trade-list { display: flex; flex-direction: column; gap: 8px; }
+.trade-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; background: #fff; border: 1.5px solid var(--line); user-select: none; -webkit-user-select: none; }
+.trade-row .text { flex: 1; }
+.trade-swatch { width: 22px; height: 22px; border-radius: 8px; flex-shrink: 0; box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(0,0,0,.08); }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch { width: 40px; height: 40px; border-radius: 14px; border: 3px solid #fff; box-shadow: 0 0 0 1.5px var(--line); }
+.swatch.on { box-shadow: 0 0 0 3px var(--ink); }
+.day-trade { border-radius: 18px; background: #fff; border: 1.5px solid var(--line); border-left: 7px solid var(--tc); margin-bottom: 10px; overflow: hidden; }
+.day-trade-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; min-height: 52px; user-select: none; -webkit-user-select: none; }
+.day-trade-head .text { flex: 1; }
+.day-trade-body { padding: 0 14px 12px; }
+.day-trade-body .up-row.done .text { text-decoration: line-through; color: var(--muted); }
+.chip.trade-chip { border-color: var(--tc); border-width: 2px; }
+.chip.trade-chip::before { content: ''; display: inline-block; width: 12px; height: 12px; border-radius: 4px; background: var(--tc); margin-right: 8px; vertical-align: -1px; }
+.money-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.money-actions .btn { flex-direction: column; gap: 4px; min-height: 72px; padding: 8px 6px; font-size: 14px; border-radius: 20px; }
+.btn.white { background: #fff; color: var(--orange-ink); border: 1.5px solid #ffd2ad; }
+.key { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 3px 0 4px; vertical-align: 0; }
+.key.g { background: #2f7a57; } .key.o { background: #ff8a3d; }
+.pay-list { margin: 6px 0; }
+.pay-list summary { color: var(--g700); font-weight: 800; padding: 8px 0; cursor: pointer; }
+
+/* ---- Striking look: tinted page, white cards with a thin white rim, orange accents ---- */
+:root { --bg: #e3f0e8; --orange: #ff9446; --ring: 0 0 0 1px rgba(47, 122, 87, .13); --shadow: 0 0 0 1px rgba(47, 122, 87, .10), 0 2px 4px rgba(31, 77, 58, .05), 0 10px 26px rgba(31, 77, 58, .10); }
+body { background: radial-gradient(120% 60% at 100% 0%, #fff1e4 0%, rgba(255, 241, 228, 0) 55%), var(--bg); background-attachment: fixed; }
+.card, .stat, .job-card, .hub-tile, .folder-tile { border: 2px solid #fff; }
+.card-head h2 { display: flex; align-items: center; gap: 9px; }
+.card-head h2::before { content: ''; width: 5px; height: 20px; border-radius: 9px; background: linear-gradient(180deg, #ffb57a, var(--orange)); flex-shrink: 0; }
+.topbar { box-shadow: inset 0 -4px 0 var(--orange), 0 6px 20px rgba(47, 122, 87, .25); }
+.btn.primary { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .35), 0 4px 12px rgba(59, 146, 104, .28); }
+.btn.orange { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .45), 0 4px 12px rgba(255, 148, 70, .38); }
+.btn.ghost { background: #fff; color: var(--g900); box-shadow: var(--ring); }
+.tabbar { border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(47, 122, 87, .12), 0 8px 30px rgba(31, 77, 58, .2); }
+.tabbar button.on { color: var(--orange-ink); background: var(--orange-soft); box-shadow: inset 0 -3px 0 var(--orange); }
+.hub-ic { box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--g200); }
+.hub-tile.orange .hub-ic { box-shadow: 0 0 0 2px #fff, 0 0 0 3px #ffd2ad; }
+.stat.out b { color: #d9622b; }
+.stat.profit { border-color: rgba(255, 255, 255, .6); }
+.pill { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .8); }
+.job-avatar { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px #ffcfa6; }
+.home-tools .btn { background: #fff; box-shadow: var(--ring); }
+.home-tools .btn .icon, .home-tools .btn svg { color: var(--orange); }
+.ledger tbody tr:nth-child(even) { background: #f7fbf8; }

@@ -1,4 +1,4 @@
-const CACHE = 'pete-work-v6';
+const CACHE = 'pete-work-v7';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icons/icon-192.png'];
 
 self.addEventListener('install', e => {

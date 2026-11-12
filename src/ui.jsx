@@ -20,6 +20,8 @@ const PATHS = {
   share: 'M4 12v8h16v-8M12 3v13M7 8l5-5 5 5',
   download: 'M12 3v13M7 11l5 5 5-5M4 21h16',
   left: 'M15 18l-6-6 6-6',
+  up: 'M6 15l6-6 6 6',
+  down: 'M6 9l6 6 6-6',
   right: 'M9 18l6-6-6-6',
   expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
   upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',

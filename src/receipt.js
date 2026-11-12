@@ -81,8 +81,20 @@ export function parseReceipt(text) {
   return { total, vat, shop: shop.replace(/[^\w &'.-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40), date, text }
 }
 
+const isPdf = f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')
+
 export async function readReceipt(file, onProgress) {
   onProgress && onProgress('Getting ready…')
+  if (isPdf(file)) {
+    const { pdfText, pdfCanvas } = await import('./thumbs')
+    const text = await pdfText(file)
+    if (amounts(text).length) return parseReceipt(text)
+    // A scanned PDF: read the picture of the first page instead
+    const w = await getWorker()
+    onProgress && onProgress('Reading the document…')
+    const { data } = await w.recognize(await pdfCanvas(file))
+    return parseReceipt(data.text || '')
+  }
   const w = await getWorker()
   onProgress && onProgress('Reading the receipt…')
   const canvas = await prepare(file)

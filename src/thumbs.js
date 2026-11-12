@@ -51,3 +51,34 @@ export async function shrinkImage(file, max = 2000) {
     return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' })
   } catch { return file }
 }
+
+// Text of a PDF (first 3 pages), rebuilt into lines, for reading downloaded receipts and invoices
+export async function pdfText(file) {
+  const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise
+  const out = []
+  for (let n = 1; n <= Math.min(3, pdf.numPages); n++) {
+    const page = await pdf.getPage(n)
+    const { items } = await page.getTextContent()
+    const rows = []
+    items.filter(i => i.str.trim()).forEach(i => {
+      const y = i.transform[5], x = i.transform[4]
+      let r = rows.find(r => Math.abs(r.y - y) < 3)
+      if (!r) rows.push(r = { y, parts: [] })
+      r.parts.push([x, i.str])
+    })
+    rows.sort((a, b) => b.y - a.y).forEach(r => out.push(r.parts.sort((a, b) => a[0] - b[0]).map(p => p[1]).join(' ')))
+  }
+  return out.join('\n')
+}
+
+// First page of a PDF as a picture (for scanned PDFs with no text in them)
+export async function pdfCanvas(file) {
+  const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise
+  const page = await pdf.getPage(1)
+  const vp = page.getViewport({ scale: 1 })
+  const s = Math.min(3, 2000 / Math.max(vp.width, vp.height))
+  const v = page.getViewport({ scale: s })
+  const c = document.createElement('canvas'); c.width = v.width; c.height = v.height
+  await page.render({ canvasContext: c.getContext('2d'), viewport: v }).promise
+  return c
+}

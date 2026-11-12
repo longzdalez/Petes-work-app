@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { put, update, removeDeep, useList, useStatus, cloudEnabled, list } from '../store'
+import { put, update, removeDeep, useList, useStatus, cloudEnabled, list, get } from '../store'
 import { Icon, Sheet, Field, TopBar, Empty, useLongPress, confirmDelete, SwipeRow, Logo } from '../ui'
 import { niceDate, today, initials, money, parseYmd, ymd, shortDate } from '../util'
 import { nav } from '../router'
@@ -105,7 +105,7 @@ function TodayCard() {
   const work = list('task', r => live(r) && r.data.date === t && !r.data.done)
   const jobTodos = list('todo', r => live(r) && !r.data.done && (r.data.date || t) <= t)
   if (jobTodos.length) groups.push({ title: 'Job to-dos', rows: jobTodos.map(r => ({ id: r.id, icon: 'check', tone: r.data.date < t ? 'red' : '', text: r.data.text, sub: `${jn(r)}${r.data.time ? ' · ' + r.data.time : ''}${r.data.date < t ? ' · from ' + shortDate(r.data.date) : ''}`, go: `/job/${r.job_id}/todos` })) })
-  if (work.length) groups.push({ title: 'On site today', rows: work.map(r => ({ id: r.id, icon: 'schedule', text: r.data.text, sub: jn(r), go: `/job/${r.job_id}/schedule` })) })
+  if (work.length) groups.push({ title: 'On site today', rows: work.map(r => ({ id: r.id, icon: 'schedule', text: (get(r.data.trade_id)?.data.name ? get(r.data.trade_id).data.name + ': ' : '') + r.data.text, sub: jn(r), go: `/job/${r.job_id}/schedule` })) })
   const folders = Object.fromEntries(list('folder').map(f => [f.id, f]))
   const mats = list('material', r => live(r) && folders[r.data.folder_id] && !r.data.done && r.data.date && r.data.text && r.data.date <= plus(7)).sort((a, b) => a.data.date.localeCompare(b.data.date))
   if (mats.length) groups.push({
