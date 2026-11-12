@@ -91,12 +91,7 @@ export function TodoList({ jobId, title = 'To-do', showCalendar = true }) {
         {date !== t && <button className="btn ghost small" onClick={() => setDate(t)}>Today</button>}
       </div>
       {shown.length > 0 && <p className="hint" style={{ margin: '10px 0 0' }}>Hold a to-do to change it, or tap the pencil. Swipe right to tick, left to delete.</p>}
-      {showCalendar && <>
-        <div className="todo-cal" onClick={() => setBig(true)}>
-          <MonthCalendar compact items={items} month={month} setMonth={setMonth} />
-        </div>
-        <button className="btn ghost wide small" style={{ marginTop: 8 }} onClick={() => setBig(true)}><Icon name="expand" size={16} /> Open calendar</button>
-      </>}
+      {showCalendar && <button className="btn ghost wide" style={{ marginTop: 12 }} onClick={() => setBig(true)}><Icon name="schedule" size={18} /> Open to-do calendar</button>}
       <Sheet open={big} onClose={() => setBig(false)} title={`${title} calendar`} full>
         <MonthCalendar items={items} month={month} setMonth={setMonth} onDay={setDay} />
         <p className="hint">Swipe to change month. Tap a day to see or add to-dos.</p>

@@ -269,44 +269,6 @@ export default function Money({ id }) {
       {scanning && <p className="notice small" style={{ marginTop: -4 }}>{scanning} The first scan takes a little longer while the reader loads.</p>}
 
       <section className="card">
-        <div className="card-head"><h2>Payments</h2></div>
-        {paid.length === 0 ? <p className="muted small">No payments yet.</p> : (
-          <table className="ledger">
-            <thead><tr><th>Date</th><th>Item</th><th className="r">Amount</th><th className="r">Balance</th></tr></thead>
-            <tbody>{paid.map(e => {
-              running += e.data.dir === 'in' ? e.data.amount : -e.data.amount
-              return (
-                <tr key={e.id} onClick={() => setEdit(e)}>
-                  <td className="nowrap">{shortDate(e.data.date)}</td>
-                  <td><div>{e.data.desc || catLabel(e.data.dir, e.data.cat)}{e.data.receipt && <Icon name="receipt" size={13} style={{ marginLeft: 4, color: '#3b9268' }} />}</div><div className="muted small">{catLabel(e.data.dir, e.data.cat)}{e.data.person ? ` · ${e.data.person}` : ''}</div></td>
-                  <td className={'r nowrap ' + (e.data.dir === 'in' ? 'pos' : 'neg')}>{e.data.dir === 'in' ? '+' : '−'}{money(e.data.amount)}</td>
-                  <td className="r nowrap">{money(running)}</td>
-                </tr>
-              )
-            })}</tbody>
-          </table>
-        )}
-      </section>
-
-      <section className="card">
-        <div className="card-head"><h2>Cash flow</h2></div>
-        <CashFlow paid={paid} upcoming={upcoming} />
-      </section>
-
-      <PeoplePayments title="Proprietor payments" people={owners} rows={wages} hint="Wages paid to the owners."
-        onAdd={() => setEdit({ title: 'Proprietor payment', data: { dir: 'out', cat: 'wages', status: 'paid', person: owners[0] || '' } })} onOpen={setEdit} />
-      <PeoplePayments title="Subcontractor payments" people={[]} rows={subs} hint="Tap Add to record a payment to a subcontractor. It goes into the payments list above too."
-        onAdd={() => setEdit({ title: 'Subcontractor payment', trades: trades.map(t => t.data.name), data: { dir: 'out', cat: 'contractor', status: 'paid' } })} onOpen={setEdit} />
-
-      <section className="card">
-        <div className="card-head"><h2>All money out on this job</h2></div>
-        <div className="kv"><span>Proprietors</span><b>{money(sum(wages))}</b></div>
-        <div className="kv"><span>Subcontractors</span><b>{money(sum(subs))}</b></div>
-        {other.map(b => <div key={b.l} className="kv"><span>{b.l}</span><b>{money(b.v)}</b></div>)}
-        <div className="kv grand"><span>Total paid out</span><b>{money(moneyOut)}</b></div>
-      </section>
-
-      <section className="card">
         <div className="card-head"><h2>Invoices to pay</h2></div>
         {toPay.length === 0
           ? <p className="muted small">Bills you still need to pay. Use Add money, choose Money out and Upcoming, and it shows here. Tick it when it's paid.</p>
@@ -329,6 +291,44 @@ export default function Money({ id }) {
           </div>
         ))}
       </section>}
+
+      <section className="card">
+        <div className="card-head"><h2>Payments</h2></div>
+        {paid.length === 0 ? <p className="muted small">No payments yet.</p> : (
+          <table className="ledger">
+            <thead><tr><th>Date</th><th>Item</th><th className="r">Amount</th><th className="r">Balance</th></tr></thead>
+            <tbody>{paid.map(e => {
+              running += e.data.dir === 'in' ? e.data.amount : -e.data.amount
+              return (
+                <tr key={e.id} onClick={() => setEdit(e)}>
+                  <td className="nowrap">{shortDate(e.data.date)}</td>
+                  <td><div>{e.data.desc || catLabel(e.data.dir, e.data.cat)}{e.data.receipt && <Icon name="receipt" size={13} style={{ marginLeft: 4, color: '#3b9268' }} />}</div><div className="muted small">{catLabel(e.data.dir, e.data.cat)}{e.data.person ? ` · ${e.data.person}` : ''}</div></td>
+                  <td className={'r nowrap ' + (e.data.dir === 'in' ? 'pos' : 'neg')}>{e.data.dir === 'in' ? '+' : '−'}{money(e.data.amount)}</td>
+                  <td className="r nowrap">{money(running)}</td>
+                </tr>
+              )
+            })}</tbody>
+          </table>
+        )}
+      </section>
+
+      <PeoplePayments title="Proprietor payments" people={owners} rows={wages} hint="Wages paid to the owners."
+        onAdd={() => setEdit({ title: 'Proprietor payment', data: { dir: 'out', cat: 'wages', status: 'paid', person: owners[0] || '' } })} onOpen={setEdit} />
+      <PeoplePayments title="Subcontractor payments" people={[]} rows={subs} hint="Tap Add to record a payment to a subcontractor. It goes into the payments list above too."
+        onAdd={() => setEdit({ title: 'Subcontractor payment', trades: trades.map(t => t.data.name), data: { dir: 'out', cat: 'contractor', status: 'paid' } })} onOpen={setEdit} />
+
+      <section className="card">
+        <div className="card-head"><h2>All money out on this job</h2></div>
+        <div className="kv"><span>Proprietors</span><b>{money(sum(wages))}</b></div>
+        <div className="kv"><span>Subcontractors</span><b>{money(sum(subs))}</b></div>
+        {other.map(b => <div key={b.l} className="kv"><span>{b.l}</span><b>{money(b.v)}</b></div>)}
+        <div className="kv grand"><span>Total paid out</span><b>{money(moneyOut)}</b></div>
+      </section>
+
+      <section className="card">
+        <div className="card-head"><h2>Cash flow</h2></div>
+        <CashFlow paid={paid} upcoming={upcoming} />
+      </section>
 
       {scanAsk && <Sheet open onClose={() => setScanAsk(false)} title="Scan a receipt">
         <button className="btn orange wide big" onClick={() => scan(true)}><Icon name="camera" size={20} /> Take a photo</button>

@@ -110,7 +110,7 @@ export function Sheet({ open, onClose, title, children, full }) {
 }
 
 // A labelled input that saves when you leave it (or as you type when live)
-export function Field({ label, value, onChange, type = 'text', placeholder, multiline, inputMode, live = true, list }) {
+export function Field({ label, value, onChange, type = 'text', placeholder, multiline, inputMode, live = true, list, rows = 3 }) {
   const [v, setV] = useState(value ?? '')
   useEffect(() => setV(value ?? ''), [value])
   const commit = val => { if ((val ?? '') !== (value ?? '')) onChange(val) }
@@ -122,7 +122,7 @@ export function Field({ label, value, onChange, type = 'text', placeholder, mult
   return (
     <label className="field">
       <span>{label}</span>
-      {multiline ? <textarea rows={3} {...props} /> : <input type={type} {...props} />}
+      {multiline ? <textarea rows={rows} {...props} /> : <input type={type} {...props} />}
     </label>
   )
 }

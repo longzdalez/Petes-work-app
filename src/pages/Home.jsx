@@ -10,7 +10,8 @@ import { invoiceTotals } from '../pdf'
 import { extraTotal } from './Extras'
 import { daysUntil } from './Contacts'
 import { TodoList } from '../Todos'
-import { canNotify, remindersOn, enableReminders } from '../reminders'
+import { ScopeAndValue } from './Job'
+import { GeneralCashFlow } from './CashFlow'
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -23,6 +24,7 @@ export function JobDetailsSheet({ job, onClose }) {
       <Field label="Client name" value={d.client} onChange={v => set({ client: v })} />
       <Field label="Address" value={d.address} onChange={v => set({ address: v })} multiline />
       <Field label="Start date" type="date" value={d.start} onChange={v => set({ start: v })} />
+      <ScopeAndValue job={job} compact />
       <label className="field"><span>Status</span>
         <div className="chips">{Object.entries(JOB_STATUS).map(([k, l]) => <button key={k} className={'chip' + (jobStatus(d) === k ? ' on' : '')} onClick={() => set({ status: k })}>{l}</button>)}</div>
       </label>
@@ -93,65 +95,6 @@ function JobCard({ job, onLong }) {
 }
 
 // Everything that needs attention across every job
-function TodayCard() {
-  useList('job')
-  const [remindersPrompt, setRP] = useState(() => canNotify() && !remindersOn() && localStorage.getItem('pw_notify_ask') !== 'no')
-  const t = today()
-  const plus = n => { const d = parseYmd(t); d.setDate(d.getDate() + n); return ymd(d) }
-  const jobs = Object.fromEntries(list('job').map(j => [j.id, j]))
-  const live = r => jobs[r.job_id] && jobStatus(jobs[r.job_id].data) !== 'finished'
-  const jn = r => jobs[r.job_id]?.data.name || ''
-  const groups = []
-  const work = list('task', r => live(r) && r.data.date === t && !r.data.done)
-  const jobTodos = list('todo', r => live(r) && !r.data.done && (r.data.date || t) <= t)
-  if (jobTodos.length) groups.push({ title: 'Job to-dos', rows: jobTodos.map(r => ({ id: r.id, icon: 'check', tone: r.data.date < t ? 'red' : '', text: r.data.text, sub: `${jn(r)}${r.data.time ? ' · ' + r.data.time : ''}${r.data.date < t ? ' · from ' + shortDate(r.data.date) : ''}`, go: `/job/${r.job_id}/todos` })) })
-  if (work.length) groups.push({ title: 'On site today', rows: work.map(r => ({ id: r.id, icon: 'schedule', text: (get(r.data.trade_id)?.data.name ? get(r.data.trade_id).data.name + ': ' : '') + r.data.text, sub: jn(r), go: `/job/${r.job_id}/schedule` })) })
-  const folders = Object.fromEntries(list('folder').map(f => [f.id, f]))
-  const mats = list('material', r => live(r) && folders[r.data.folder_id] && !r.data.done && r.data.date && r.data.text && r.data.date <= plus(7)).sort((a, b) => a.data.date.localeCompare(b.data.date))
-  if (mats.length) groups.push({
-    title: 'Materials to order', rows: mats.map(r => {
-      const soon = r.data.date <= plus(2)
-      return { id: r.id, icon: 'materials', tone: r.data.date < t ? 'red' : soon ? 'orange' : '', text: r.data.text, sub: `${jn(r)} · needed ${r.data.date < t ? 'by ' : ''}${shortDate(r.data.date)}${soon ? (r.data.date < t ? ' (late)' : ' (order now)') : ''}`, go: `/job/${r.job_id}/folder/${r.data.folder_id}` }
-    })
-  })
-  const invs = list('invoice', r => jobs[r.job_id] && r.data.type === 'invoice' && r.data.status !== 'paid' && r.data.status !== 'draft' && r.data.due && r.data.due <= plus(7))
-  const money_ = list('money', r => jobs[r.job_id] && r.data.status === 'upcoming' && r.data.date <= plus(7))
-  const pay = [
-    ...invs.map(r => ({ id: r.id, icon: 'invoice', tone: r.data.due < t ? 'red' : 'orange', text: `${r.data.number} · ${money(invoiceTotals(r.data).total)}`, sub: `${jn(r)} · ${r.data.due < t ? 'overdue since' : 'due'} ${shortDate(r.data.due)}`, go: `/job/${r.job_id}/invoice/${r.id}` })),
-    ...money_.map(r => ({ id: r.id, icon: 'money', tone: r.data.date < t ? 'red' : '', text: `${r.data.dir === 'in' ? 'Coming in' : 'To pay'}: ${money(r.data.amount)}`, sub: `${jn(r)} · ${r.data.desc || ''} ${shortDate(r.data.date)}`, go: `/job/${r.job_id}/money` })),
-  ]
-  if (pay.length) groups.push({ title: 'Money due', rows: pay })
-  const extras = list('extra', r => jobs[r.job_id] && r.data.status === 'pending')
-  if (extras.length) groups.push({ title: 'Extras waiting for client OK', rows: extras.map(r => ({ id: r.id, icon: 'extra', tone: 'orange', text: `${r.data.text} · ${money(extraTotal(r.data))}`, sub: jn(r), go: `/job/${r.job_id}/extras` })) })
-  const ren = list('renewal', r => daysUntil(r.data.expiry) <= 30)
-  if (ren.length) groups.push({ title: 'Renewals', rows: ren.map(r => { const n = daysUntil(r.data.expiry); return { id: r.id, icon: 'shield', tone: n < 0 ? 'red' : 'orange', text: r.data.name, sub: n < 0 ? `Expired ${niceDate(r.data.expiry)}` : `Expires in ${n} days`, go: '/renewals' } }) })
-  return (
-    <section className="card today-card">
-      <div className="card-head"><h2>Today</h2><span className="pill orange">{new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span></div>
-      <p className="small muted" style={{ margin: '-4px 0 10px' }}>This fills itself in from all your jobs: work planned for today, materials to order, job to-dos, money due, extras waiting and renewals. You don't add to it directly.</p>
-      {groups.length === 0 && <div className="all-clear"><Icon name="check" size={18} /> Nothing needs you today.</div>}
-      {remindersPrompt && <div className="remind-prompt">
-        <span className="small"><b>Get a phone reminder</b> 2 days before anything marked urgent.</span>
-        <button className="btn primary small" onClick={async () => { try { await enableReminders(); setRP(false) } catch (e) { alert(e.message) } }}>Turn on</button>
-        <button className="icon-btn small" onClick={() => { localStorage.setItem('pw_notify_ask', 'no'); setRP(false) }} aria-label="Not now"><Icon name="close" size={16} /></button>
-      </div>}
-      {groups.map(g => (
-        <div key={g.title} className="today-group">
-          <h3>{g.title}</h3>
-          {g.rows.slice(0, 5).map(r => (
-            <div key={r.id} className="today-row" onClick={() => nav(r.go)} role="button">
-              <span className={'today-ic ' + (r.tone || '')}><Icon name={r.icon} size={17} /></span>
-              <span className="text"><b>{r.text}</b><span>{r.sub}</span></span>
-              <Icon name="right" size={18} style={{ color: '#a3b3aa' }} />
-            </div>
-          ))}
-          {g.rows.length > 5 && <div className="small muted" style={{ paddingLeft: 6 }}>and {g.rows.length - 5} more</div>}
-        </div>
-      ))}
-    </section>
-  )
-}
-
 export default function Home() {
   const [filter, setFilter] = useState('active')
   const jobs = useList('job', r => filter === 'all' || (filter === 'finished' ? r.data.status === 'finished' : r.data.status !== 'finished'),
@@ -171,13 +114,13 @@ export default function Home() {
         </>} />
       <main className="content">
         <BackupReminder />
-        <TodayCard />
         <div className="home-tools">
           <button className="btn ghost" onClick={() => nav('/contacts')}><Icon name="users" size={18} /> Contacts</button>
           <button className="btn ghost" onClick={() => nav('/renewals')}><Icon name="shield" size={18} /> Renewals</button>
           <button className="btn ghost" onClick={() => nav('/search')}><Icon name="search" size={18} /> Search</button>
         </div>
         <TodoList title="To-do" />
+        <GeneralCashFlow />
         <div className="section-head">
           <h2>Jobs</h2>
           <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={18} /> New job</button>

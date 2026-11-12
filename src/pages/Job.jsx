@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useRecord, update, useList } from '../store'
 import { Icon, TopBar, Field, Empty, PromptSheet } from '../ui'
 import { nav } from '../router'
-import { niceDate } from '../util'
+import { niceDate, money } from '../util'
 import { JOB_STATUS, jobProgress, saveTemplate, smallImage, jobStatus } from '../jobs'
 import { pickFile } from '../files'
 import { TodoList } from '../Todos'
@@ -77,6 +77,31 @@ export function JobTodos({ id }) {
   )
 }
 
+// What's being done and what it's worth: shown on the job page and in the hold-down details
+export function ScopeAndValue({ job, compact }) {
+  const d = job.data
+  const set = patch => update(job.id, patch)
+  const vt = d.valueType || 'quote'
+  const body = <>
+    <Field label={compact ? "Scope of works" : "What needs doing"} value={d.scope} onChange={v => set({ scope: v })} multiline rows={compact ? 4 : 6} placeholder="What needs doing on this job, e.g. strip out kitchen, move radiator, first and second fix electrics, plaster, fit units" />
+    <label className="field"><span>Job value</span>
+      <div className="seg small" style={{ margin: 0 }}>
+        <button className={vt === 'estimate' ? 'on' : ''} onClick={() => set({ valueType: 'estimate' })}>Estimate</button>
+        <button className={vt === 'quote' ? 'on' : ''} onClick={() => set({ valueType: 'quote' })}>Quotation</button>
+      </div>
+    </label>
+    <Field label={vt === 'estimate' ? 'Estimate £' : 'Quotation £'} inputMode="decimal" value={d.value ?? ''} onChange={v => set({ value: v === '' ? '' : Number(String(v).replace(/[£,\s]/g, '')) || 0 })} placeholder="0.00" />
+    <Field label="Details (optional)" value={d.valueNotes} onChange={v => set({ valueNotes: v })} multiline rows={2} placeholder="e.g. Includes materials, excludes kitchen units" />
+  </>
+  if (compact) return body
+  return (
+    <section className="card scope-card">
+      <div className="card-head"><h2>Scope of works</h2>{d.value ? <span className="pill orange">{vt === 'estimate' ? 'Estimate' : 'Quote'} {money(d.value)}</span> : null}</div>
+      {body}
+    </section>
+  )
+}
+
 export default function JobInfo({ id }) {
   const job = useRecord(id)
   const extras = useList('extra', r => r.job_id === id && r.data.status === 'pending')
@@ -119,6 +144,7 @@ export default function JobInfo({ id }) {
         <HubTile icon="check" label="To-do" badge={todos.length} onClick={() => go('todos')} />
       </div>
       {photos.length > 0 && <p className="hint" style={{ marginTop: -4 }}>{photos.length} progress photo{photos.length > 1 ? 's' : ''} in the diary</p>}
+      <ScopeAndValue job={job} />
 
       <section className="card">
         <div className="card-head"><h2>Job information</h2><span className="muted small">Created {niceDate(d.created)}</span></div>
