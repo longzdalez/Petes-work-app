@@ -3,7 +3,7 @@ import './styles.css'
 import { initCloud, cloudEnabled, useStatus, keepStorage } from './store'
 import { useRoute } from './router'
 import Home from './pages/Home'
-import JobInfo from './pages/Job'
+import JobInfo, { JobTodos } from './pages/Job'
 import Docs from './pages/Docs'
 import Materials, { Folder } from './pages/Materials'
 import Money from './pages/Money'
@@ -45,6 +45,7 @@ function App() {
       : sub === 'invoices' ? <Invoices id={jobId} />
       : sub === 'invoice' ? <InvoiceEdit id={jobId} iid={r[3]} />
       : sub === 'extras' ? <Extras id={jobId} />
+      : sub === 'todos' ? <JobTodos id={jobId} />
       : sub === 'photos' ? <Photos id={jobId} />
       : sub === 'snags' ? <Snags id={jobId} />
       : sub === 'hours' ? <Hours id={jobId} />
@@ -57,7 +58,7 @@ function App() {
   else page = <Home />
   return <>
     {page}
-    {!['settings', 'share', 'search'].includes(r[0]) && <VoiceButton jobId={jobId} />}
+    {!['settings', 'share', 'search'].includes(r[0]) && <VoiceButton ctx={{ page: jobId ? (r[2] || 'job') : 'home', jobId, folderId: r[2] === 'folder' ? r[3] : null }} />}
   </>
 }
 

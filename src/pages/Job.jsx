@@ -5,6 +5,7 @@ import { nav } from '../router'
 import { niceDate } from '../util'
 import { JOB_STATUS, jobProgress, saveTemplate, smallImage, jobStatus } from '../jobs'
 import { pickFile } from '../files'
+import { TodoList } from '../Todos'
 
 export const TABS = [
   { key: '', label: 'Overview', icon: 'info' },
@@ -66,11 +67,22 @@ function HubTile({ icon, label, onClick, badge, orange }) {
   )
 }
 
+export function JobTodos({ id }) {
+  const job = useRecord(id)
+  return (
+    <JobShell job={job} tab="" title="Job to-dos" onBack={() => nav(`/job/${id}`)}>
+      <TodoList jobId={id} title="To-do for this job" />
+      <p className="hint">These also show on the job's Schedule calendar in orange, and on the home page when they're due.</p>
+    </JobShell>
+  )
+}
+
 export default function JobInfo({ id }) {
   const job = useRecord(id)
   const extras = useList('extra', r => r.job_id === id && r.data.status === 'pending')
   const snags = useList('snag', r => r.job_id === id && !r.data.done)
   const photos = useList('photo', r => r.job_id === id)
+  const todos = useList('todo', r => r.job_id === id && !r.data.done)
   const [tpl, setTpl] = useState(false)
   if (!job) return <JobShell job={null} />
   const d = job.data
@@ -83,11 +95,13 @@ export default function JobInfo({ id }) {
       <div className="job-hero">
         {d.cover && <img src={d.cover} alt="" onClick={cover} />}
         <div className="job-hero-body">
+          <div className="small muted" style={{ fontWeight: 700, margin: '0 0 4px 2px' }}>Where is this job up to? Tap one:</div>
           <div className="status-row">
             {Object.entries(JOB_STATUS).map(([k, l]) => (
               <button key={k} className={'chip' + (jobStatus(d) === k ? ' on' : '')} onClick={() => set({ status: k })}>{l}</button>
             ))}
           </div>
+          <div className="small muted" style={{ margin: '6px 0 0 2px' }}>{{ quoting: "You're still pricing this job up.", booked: 'The job is agreed and booked in.', onsite: "You're working on this job now.", finished: 'Done. It moves to the Finished list on the home page.' }[jobStatus(d)]}</div>
           {prog && <>
             <div className="progress"><div style={{ width: prog.pct + '%' }} /></div>
             <div className="small muted" style={{ marginTop: 6 }}>{prog.label}{d.finish ? ` · finishes ${niceDate(d.finish, { noYear: true })}` : ''}</div>
@@ -102,7 +116,7 @@ export default function JobInfo({ id }) {
         <HubTile icon="snag" label="Snagging" badge={snags.length} onClick={() => go('snags')} />
         <HubTile icon="clock" label="Hours" onClick={() => go('hours')} />
         <HubTile icon="copy" label="Save as template" onClick={() => setTpl(true)} />
-        <HubTile icon="schedule" label="Schedule" onClick={() => go('schedule')} />
+        <HubTile icon="check" label="To-do" badge={todos.length} onClick={() => go('todos')} />
       </div>
       {photos.length > 0 && <p className="hint" style={{ marginTop: -4 }}>{photos.length} progress photo{photos.length > 1 ? 's' : ''} in the diary</p>}
 

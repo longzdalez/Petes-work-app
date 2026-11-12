@@ -12,6 +12,7 @@ export function parseDate(s, now = new Date()) {
   const add = n => { const d = new Date(base); d.setDate(d.getDate() + n); return ymd(d) }
   if (/\btoday\b/.test(s)) return ymd(base)
   if (/\btomorrow\b/.test(s)) return add(1)
+  if (/\byesterday\b/.test(s)) return add(-1)
   if (/\bnext week\b/.test(s)) return add(7)
   const dn = DAYNAMES.findIndex(d => new RegExp(`\\b${d}\\b`).test(s))
   if (dn >= 0) { let diff = (dn - base.getDay() + 7) % 7 || 7; if (/\bnext\b/.test(s) && diff < 7) diff += 0; return add(diff) }
@@ -52,7 +53,7 @@ function takeUrgency(s) {
 function takeDate(s) {
   const m = s.match(/\s*,?\s*\b(needed|need it|needed by|needed on|for|by|on|due)\b\s+(.+)$/i)
   if (m) { const d = parseDate(m[2]); if (d) return [s.slice(0, m.index).trim(), d] }
-  const m2 = s.match(/\s*,?\s*\b(today|tomorrow|next week|(?:next )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b\s*$/i)
+  const m2 = s.match(/\s*,?\s*\b(today|tomorrow|yesterday|next week|(?:next )?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b\s*$/i)
   if (m2) return [s.slice(0, m2.index).trim(), parseDate(m2[1])]
   return [s, null]
 }
@@ -97,4 +98,71 @@ export function parseCommand(raw) {
   // Fall back: to-do
   let [rest, date] = takeDate(s)
   return { kind: 'todo', text: cap(clean(rest)), date: date || today() }
+}
+
+// ---- Understanding speech based on the page that's open ----
+const NUMS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 }
+const lead = (s, words) => s.replace(new RegExp(`^(?:please\\s+|can you\\s+)?(?:${words})\\b[\\s,:]*`, 'i'), '')
+const amountIn = s => { const m = s.match(/£\s*([\d,]+(?:\.\d+)?)|\b([\d,]+(?:\.\d+)?)\s*(?:pounds?|quid|k\b)/i); if (!m) return null; let v = parseFloat((m[1] || m[2]).replace(/,/g, '')); if (/k\b/i.test(m[0])) v *= 1000; return { v, m: m[0] } }
+
+export function parseInContext(page, raw) {
+  const s = raw.trim().replace(/[.!?]+$/, '')
+  switch (page) {
+    case 'folder': {
+      const [r1, urg] = takeUrgency(lead(s, 'add|need|we need|order|get|put'))
+      const [r2, date] = takeDate(r1)
+      return { kind: 'material', text: cap(clean(r2)), date: date || '', urgency: urg, folder: '' }
+    }
+    case 'materials': {
+      const c = parseCommand(s)
+      if (c.kind === 'material') return c
+      const [r1, urg] = takeUrgency(lead(s, 'add|need|we need|order|get'))
+      const [r2, date] = takeDate(r1)
+      return { kind: 'material', text: cap(clean(r2)), date: date || '', urgency: urg, folder: '' }
+    }
+    case 'schedule': {
+      const [r1, urg] = takeUrgency(lead(s, 'schedule|plan|book in|book|add|put'))
+      const [rest, date] = takeDate(r1)
+      return { kind: 'task', text: cap(clean(rest)), date: date || today(), urgency: urg || 'green' }
+    }
+    case 'money': {
+      const c = parseCommand(s)
+      if (c.kind === 'money') return c
+      const a = amountIn(s) || { v: parseFloat((s.match(/\b\d[\d,.]*\b/) || ['0'])[0].replace(/,/g, '')), m: (s.match(/\b\d[\d,.]*\b/) || [''])[0] }
+      const dir = /\b(received|deposit|from the client|from client|paid us|payment from|money in|came in)\b/i.test(s) ? 'in' : 'out'
+      const desc = cap(clean(s.replace(a.m, ' ').replace(/\b(money (in|out)|received|spent|paid|payment|of|for|on|to|from|the client|client)\b/gi, ' ').replace(/\s+/g, ' ')))
+      const low = s.toLowerCase()
+      const cat = dir === 'in' ? 'client' : /wage/.test(low) ? 'wages' : /electric|plumb|plaster|roof|contractor|scaffold|sub/.test(low) ? 'contractor' : /timber|wood|brick|cement|sand|material|board|screw|tile|paint|merchant/.test(low) ? 'materials' : 'other'
+      return { kind: 'money', dir, amount: a.v || 0, desc, cat }
+    }
+    case 'extras': {
+      const a = amountIn(s)
+      let t = lead(s, 'add an extra|add extra|extra|add a change|add')
+      if (a) t = t.replace(new RegExp(`\\s*(?:for|at|costing|price)?\\s*${a.m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'), ' ')
+      return { kind: 'extra', text: cap(clean(t)), price: a ? a.v : 0 }
+    }
+    case 'snags': {
+      let t = lead(s, 'add a snag|add snag|snag|add')
+      let location = ''
+      const m = t.match(/\s+(?:in|on) the ([a-z]+(?: [a-z]+)?)$/i)
+      if (m) { location = cap(m[1]); t = t.slice(0, m.index) }
+      return { kind: 'snag', text: cap(clean(t)), location }
+    }
+    case 'hours': {
+      let t = s.toLowerCase().replace(/\s+and a half\b/g, '.5').replace(/\bhalf a day\b/g, '4 hours').replace(/\ba full day\b|\ball day\b/g, '8 hours')
+      for (const [w, n] of Object.entries(NUMS)) t = t.replace(new RegExp(`\\b${w}\\b`, 'g'), String(n))
+      const [r1, date] = takeDate(t)
+      const h = r1.match(/(\d+(?:\.\d+)?)\s*hours?/)
+      const hours = h ? parseFloat(h[1]) : 8
+      const person = cap(clean(r1.replace(/(\d+(?:\.\d+)?)\s*hours?/, ' ').replace(/\b(log|add|did|worked|work|for|today|hours?)\b/g, ' ').replace(/\s+/g, ' ')))
+      return { kind: 'hours', person, hours, date: date || today() }
+    }
+    case 'home': return parseCommand(s)
+    default: {
+      // On any other job page, plain sentences become a to-do for that job
+      const c = parseCommand(s)
+      if (c.kind === 'todo') return { ...c, kind: 'jobtodo' }
+      return c
+    }
+  }
 }

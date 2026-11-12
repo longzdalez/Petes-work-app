@@ -9,6 +9,7 @@ import { pickFile } from '../files'
 import { invoiceTotals } from '../pdf'
 import { extraTotal } from './Extras'
 import { daysUntil } from './Contacts'
+import { TodoList } from '../Todos'
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -100,6 +101,8 @@ function TodayCard() {
   const jn = r => jobs[r.job_id]?.data.name || ''
   const groups = []
   const work = list('task', r => live(r) && r.data.date === t && !r.data.done)
+  const jobTodos = list('todo', r => live(r) && !r.data.done && (r.data.date || t) <= t)
+  if (jobTodos.length) groups.push({ title: 'Job to-dos', rows: jobTodos.map(r => ({ id: r.id, icon: 'check', tone: r.data.date < t ? 'red' : '', text: r.data.text, sub: `${jn(r)}${r.data.time ? ' · ' + r.data.time : ''}${r.data.date < t ? ' · from ' + shortDate(r.data.date) : ''}`, go: `/job/${r.job_id}/todos` })) })
   if (work.length) groups.push({ title: 'On site today', rows: work.map(r => ({ id: r.id, icon: 'schedule', text: r.data.text, sub: jn(r), go: `/job/${r.job_id}/schedule` })) })
   const folders = Object.fromEntries(list('folder').map(f => [f.id, f]))
   const mats = list('material', r => live(r) && folders[r.data.folder_id] && !r.data.done && r.data.date && r.data.text && r.data.date <= plus(7)).sort((a, b) => a.data.date.localeCompare(b.data.date))
@@ -141,37 +144,6 @@ function TodayCard() {
   )
 }
 
-function TodoBox() {
-  const t = today()
-  const todos = useList('todo', r => !r.job_id && (!r.data.done || r.data.doneOn === t) && (r.data.date || t) <= t,
-    (a, b) => (a.data.done - b.data.done) || a.data.created.localeCompare(b.data.created))
-  const past = useList('todo').map(x => x.data.text)
-  const [text, setText] = useState('')
-  const add = () => { if (!text.trim()) return; put('todo', { text: text.trim(), date: t, done: false }); setText('') }
-  return (
-    <section className="card todo-card">
-      <div className="card-head"><h2>To-do</h2><span className="pill">{todos.filter(x => !x.data.done).length} left</span></div>
-      {todos.length === 0 && <p className="muted small" style={{ marginTop: 0 }}>Nothing yet. Add something below or use the microphone.</p>}
-      <div className="checklist">
-        {todos.map(td => (
-          <SwipeRow key={td.id} className={td.data.done ? 'done' : ''} onTick={() => update(td.id, { done: !td.data.done, doneOn: t })} onDelete={() => removeDeep(td.id)}>
-            <button className={'tick' + (td.data.done ? ' on' : '')} onClick={() => update(td.id, { done: !td.data.done, doneOn: t })} aria-label="Tick">
-              {td.data.done && <Icon name="check" size={16} stroke={3} />}
-            </button>
-            <span className="text">{td.data.text}{td.data.date < t && !td.data.done && <em className="overdue"> · from {niceDate(td.data.date, { noYear: true })}</em>}</span>
-          </SwipeRow>
-        ))}
-      </div>
-      <div className="add-row">
-        <input value={text} list="todo-sugg" onChange={e => setText(e.target.value)} placeholder="Add a to-do…" onKeyDown={e => e.key === 'Enter' && add()} />
-        <datalist id="todo-sugg">{[...new Set(past)].slice(0, 100).map(v => <option key={v} value={v} />)}</datalist>
-        <button className="btn primary" onClick={add} aria-label="Add"><Icon name="plus" size={18} /></button>
-      </div>
-      {todos.length > 0 && <p className="hint" style={{ margin: '10px 0 0' }}>Swipe right to tick, left to delete.</p>}
-    </section>
-  )
-}
-
 export default function Home() {
   const [filter, setFilter] = useState('active')
   const jobs = useList('job', r => filter === 'all' || (filter === 'finished' ? r.data.status === 'finished' : r.data.status !== 'finished'),
@@ -197,7 +169,7 @@ export default function Home() {
           <button className="btn ghost" onClick={() => nav('/renewals')}><Icon name="shield" size={18} /> Renewals</button>
           <button className="btn ghost" onClick={() => nav('/search')}><Icon name="search" size={18} /> Search</button>
         </div>
-        <TodoBox />
+        <TodoList title="To-do" />
         <div className="section-head">
           <h2>Jobs</h2>
           <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={18} /> New job</button>
