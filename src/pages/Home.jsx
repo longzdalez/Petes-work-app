@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { put, update, removeDeep, useList, useStatus, cloudEnabled, list, get } from '../store'
+import { put, update, removeDeep, useList, useStatus, useVersion, cloudEnabled, list, get } from '../store'
 import { Icon, Sheet, Field, TopBar, Empty, useLongPress, confirmDelete, SwipeRow, Logo } from '../ui'
+import { ProfitRing, Glyph } from '../ui2'
+import { jobMoney, shortMoney, todayItems, unpaidInvoices, urgentCount } from '../summary'
+import { useSettings } from './Settings'
 import { niceDate, today, initials, money, parseYmd, ymd, shortDate } from '../util'
 import { nav } from '../router'
 import { BackupReminder } from '../Backup'
@@ -79,62 +82,136 @@ function JobCard({ job, onLong }) {
   const lp = useLongPress(() => onLong(job), () => nav(`/job/${job.id}`))
   const prog = jobProgress(d)
   const st = jobStatus(d)
+  const m = jobMoney(job)
   return (
-    <div className="job-card" {...lp} role="button" tabIndex={0}>
-      <div className="job-avatar">{d.cover ? <img src={d.cover} alt="" /> : initials(d.name)}</div>
-      <div className="job-main">
-        <div className="job-top"><div className="job-name">{d.name || 'Untitled job'}</div><span className={'status-pill st-' + st}>{JOB_STATUS[st]}</span></div>
-        <div className="job-meta">{[d.client, d.address].filter(Boolean).join(' · ') || 'Hold to add details'}</div>
-        {prog && st !== 'finished' ? <>
-          <div className="progress"><div style={{ width: prog.pct + '%' }} /></div>
-          <div className="job-start">{prog.label}</div>
-        </> : d.start && <div className="job-start">Starts {niceDate(d.start)}</div>}
+    <div className="job-card2" {...lp} role="button" tabIndex={0}>
+      <div className={'jc-cover st-' + st}>
+        {d.cover ? <img src={d.cover} alt="" /> : <span className="jc-initials">{initials(d.name)}</span>}
+        <span className={'status-pill on-cover st-' + st}>{JOB_STATUS[st]}</span>
       </div>
+      <div className="jc-body">
+        <div className="jc-main">
+          <div className="job-name">{d.name || 'Untitled job'}</div>
+          <div className="job-meta">{[d.client, d.address?.split('\n')[0]].filter(Boolean).join(' · ') || 'Hold to add details'}</div>
+          {prog && st !== 'finished' ? <>
+            <div className="progress"><div style={{ width: prog.pct + '%' }} /></div>
+            <div className="job-start">{prog.label}</div>
+          </> : d.start && <div className="job-start">Starts {niceDate(d.start)}</div>}
+        </div>
+        {m.quote > 0 && <div className="jc-ring"><ProfitRing pct={m.left} /><span>{m.spent ? 'left of ' : 'of '}{shortMoney(m.quote)}</span></div>}
+      </div>
+      {m.warn && <div className="budget-warn"><Glyph name="warn" size={18} /> Costs are eating the profit: {money(m.spent)} spent so far</div>}
     </div>
   )
 }
+
+// Pick which job a receipt or payment is for
+function JobPickSheet({ action, onClose }) {
+  const jobs = useList('job', r => jobStatus(r.data) !== 'finished', (a, b) => (b.data.created || '').localeCompare(a.data.created || ''))
+  if (!action) return null
+  const go = j => { onClose(); nav(`/job/${j.id}/money?do=${action}`) }
+  return (
+    <Sheet open onClose={onClose} title={action === 'scan' ? 'Which job is the receipt for?' : 'Which job is the money for?'}>
+      {jobs.length === 0 && <p className="muted">Make a job first, then add money to it.</p>}
+      <div className="pick-list">
+        {jobs.map(j => <button key={j.id} className="pick-row" onClick={() => go(j)}><span className="job-avatar small">{j.data.cover ? <img src={j.data.cover} alt="" /> : initials(j.data.name)}</span><span className="text"><b>{j.data.name || 'Untitled job'}</b><span>{j.data.client}</span></span><Icon name="right" size={20} /></button>)}
+      </div>
+      <p className="small muted">For business payments not tied to a job, like van finance, use General cash flow on the home page.</p>
+    </Sheet>
+  )
+}
+
+function TodayCard() {
+  useVersion()
+  const items = todayItems()
+  const shown = items.slice(0, 8)
+  return (
+    <section className="card today2">
+      <div className="card-head"><h2>Today</h2><span className="pill">{items.length ? `${items.length} thing${items.length > 1 ? 's' : ''}` : 'All clear'}</span></div>
+      {items.length === 0 && <p className="muted small" style={{ margin: 0 }}>Nothing booked for today. Work from the Schedule, to-dos, urgent materials and payments due show here.</p>}
+      {shown.map(it => (
+        <button key={it.id} className="t-row" onClick={() => it.url && nav(it.url)}>
+          <span className={'t-when' + (it.late || it.urgent ? ' late' : '')}>{it.label}</span>
+          <span className="t-dot" style={{ background: it.color, boxShadow: `0 0 0 3px ${it.color}26` }} />
+          <span className="t-text"><b>{it.title}{it.urgent && <em className="urgent-tag">Urgent</em>}</b>{it.sub && <span>{it.sub}</span>}</span>
+          {it.amount ? <span className={'t-amt ' + (it.dir === 'in' ? 'pos' : 'neg')}>{it.dir === 'in' ? '+' : '−'}{money(it.amount)}</span> : null}
+        </button>
+      ))}
+      {items.length > shown.length && <p className="small muted" style={{ margin: '8px 0 0' }}>…and {items.length - shown.length} more</p>}
+    </section>
+  )
+}
+
+const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
 
 // Everything that needs attention across every job
 export default function Home() {
   const [filter, setFilter] = useState('active')
   const jobs = useList('job', r => filter === 'all' || (filter === 'finished' ? r.data.status === 'finished' : r.data.status !== 'finished'),
     (a, b) => (b.data.created || '').localeCompare(a.data.created || ''))
+  const allJobs = useList('job')
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
+  const [pick, setPick] = useState(null)
   const st = useStatus()
+  const settings = useSettings()
   const editJob = jobs.find(j => j.id === editing)
+  const owed = unpaidInvoices()
+  const owedTotal = owed.reduce((s, r) => s + invoiceTotals(r.data).total, 0)
+  const urgent = urgentCount()
+  const onsite = allJobs.filter(j => jobStatus(j.data) === 'onsite')
+  const t = today()
+  const people = new Set(list('task', r => r.data.date === t && r.data.trade_id && onsite.some(j => j.id === r.job_id)).map(r => r.data.trade_id)).size
+  const summary = [onsite.length ? `${onsite.length} job${onsite.length > 1 ? 's' : ''} on site` : 'No jobs on site', urgent ? `${urgent} urgent` : 'nothing urgent'].join(' · ')
   return (
     <div className="page">
-      <TopBar title={<Logo />}
-        right={<>
-          <button className="icon-btn" onClick={() => nav('/search')} aria-label="Search"><Icon name="search" /></button>
-          <button className="icon-btn" onClick={() => nav('/settings')} aria-label="Settings">
+      <header className="home-hero">
+        <div className="hh-top">
+          <Logo />
+          <button className="hh-btn" onClick={() => nav('/search')} aria-label="Search"><Icon name="search" size={20} /></button>
+          <button className="hh-btn" onClick={() => nav('/settings')} aria-label="Settings">
             {cloudEnabled && <span className={'sync-dot ' + (st.signedIn && !st.error ? 'ok' : 'bad')} />}
-            <Icon name="settings" /></button>
-        </>} />
-      <main className="content">
-        <BackupReminder />
-        <div className="home-tools">
-          <button className="btn ghost" onClick={() => nav('/contacts')}><Icon name="users" size={18} /> Contacts</button>
-          <button className="btn ghost" onClick={() => nav('/renewals')}><Icon name="shield" size={18} /> Renewals</button>
-          <button className="btn ghost" onClick={() => nav('/search')}><Icon name="search" size={18} /> Search</button>
+            <Icon name="settings" size={20} /></button>
         </div>
-        <TodoList title="To-do" />
-        <GeneralCashFlow />
+        <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${settings.owners[0]}` : ''}</div>
+        <div className="hh-sum">{summary}</div>
+      </header>
+      <main className="content home-content">
+        <div className="hero-stats">
+          <div className="hs"><span>Owed to you</span><b className="pos">{shortMoney(owedTotal)}</b><small>{owed.length} invoice{owed.length === 1 ? '' : 's'}</small></div>
+          <div className={'hs' + (urgent ? ' hot' : '')}><span>Urgent</span><b>{urgent}</b><small>due in 2 days</small></div>
+          <div className="hs"><span>On site</span><b className="pos">{onsite.length} job{onsite.length === 1 ? '' : 's'}</b><small>{people ? `${people} ${people === 1 ? 'person' : 'people'} today` : 'nobody booked'}</small></div>
+        </div>
+        <div className="quick">
+          <button onClick={() => setPick('scan')}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
+          <button onClick={() => setPick('add')}><span className="q-ic green"><Icon name="money" size={24} /></span>Add money</button>
+          <button onClick={() => setAdding(true)}><span className="q-ic white"><Icon name="plus" size={24} /></span>New job</button>
+          <button onClick={() => document.getElementById('home-todo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
+        </div>
+        <BackupReminder />
+        <TodayCard />
         <div className="section-head">
           <h2>Jobs</h2>
-          <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={18} /> New job</button>
+          <button className="btn primary small" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> New job</button>
         </div>
         <div className="seg small" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
           {[['active', 'Current'], ['finished', 'Finished'], ['all', 'All']].map(([k, l]) => <button key={k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)}>{l}</button>)}
         </div>
         {jobs.length === 0
-          ? <Empty icon="folder" title={filter === 'finished' ? 'No finished jobs' : 'No jobs yet'} text="Press New job to add one. Each job has its own pages for Documents, Materials, Money, Schedule and Invoices, which open from the toolbar at the bottom of the job." />
+          ? <Empty icon="folder" title={filter === 'finished' ? 'No finished jobs' : 'No jobs yet'} text="Press New job to add one. Each job has its own pages for Materials, Money and Schedule, plus Documents, Invoices and more under More at the bottom of the job." />
           : <div className="job-list">{jobs.map(j => <JobCard key={j.id} job={j} onLong={j => setEditing(j.id)} />)}</div>}
         {jobs.length > 0 && <p className="hint">Tap a job to open it. Press and hold to change its details or status. Set a job to Finished to move it off this list.</p>}
+        <div id="home-todo" className="anchor"><TodoList title="To-do" /></div>
+        <GeneralCashFlow />
+        <div className="home-tools">
+          <button className="btn ghost" onClick={() => nav('/contacts')}><Icon name="users" size={18} /> Contacts</button>
+          <button className="btn ghost" onClick={() => nav('/renewals')}><Icon name="shield" size={18} /> Renewals</button>
+          <button className="btn ghost" onClick={() => nav('/cashflow')}><Icon name="money" size={18} /> Cash flow</button>
+        </div>
       </main>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
       <NewJobSheet open={adding} onClose={() => setAdding(false)} />
+      <JobPickSheet action={pick} onClose={() => setPick(null)} />
     </div>
   )
 }
