@@ -1,4 +1,4 @@
-// General cash flow: business payments that aren't tied to one job (van, insurance, phone, loan…), one-off or repeating
+// Repeat payments (was General cash flow): business payments that aren't tied to one job (van, insurance, phone, loan…), one-off or repeating
 import { useState } from 'react'
 import { put, update, remove, useList } from '../store'
 import { Icon, Sheet, Field, TopBar, Empty, confirmDelete } from '../ui'
@@ -95,7 +95,7 @@ export function GeneralCashFlow() {
   const inn = next.filter(o => !o.paid && o.rec.data.dir === 'in').reduce((s, o) => s + num(o.rec.data.amount), 0)
   return (
     <section className="card">
-      <div className="card-head"><h2>General cash flow</h2><button className="btn primary small" onClick={() => setEdit({ data: {} })}><Icon name="plus" size={16} /> Add</button></div>
+      <div className="card-head"><h2>Repeat payments</h2><button className="btn primary small" onClick={() => setEdit({ data: {} })}><Icon name="plus" size={16} /> Add</button></div>
       {pays.length === 0 ? <p className="muted small" style={{ marginTop: 0 }}>Business payments that aren't for one job, like van finance, insurance or your phone. Add one-off payments or ones that repeat every week, month or year, and tick them off when they're paid.</p> : <>
         <div className="cf-sum">
           <div><span>Going out, next 30 days</span><b className="neg">{money(out)}</b></div>
@@ -121,7 +121,7 @@ export default function CashFlowPage() {
     .reduce((s, p) => s + (p.data.dir === 'in' ? -1 : 1) * num(p.data.amount) * ({ weekly: 52 / 12, monthly: 1, yearly: 1 / 12 }[p.data.repeat] || 0), 0)
   return (
     <div className="page">
-      <TopBar title="General cash flow" sub="Payments not tied to a job" onBack={() => back('/')} />
+      <TopBar title="Repeat payments" sub="Payments not tied to a job" onBack={() => back('/')} />
       <main className="content">
         <button className="btn orange wide big" onClick={() => setEdit({ data: {} })}><Icon name="plus" size={20} /> Add a payment</button>
         {pays.length === 0 && <Empty icon="money" title="No payments yet" text="Add things like van finance, insurance, phone or loan payments. Set them to repeat and they'll show up each time they're due." />}

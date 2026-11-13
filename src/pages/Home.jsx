@@ -116,7 +116,7 @@ function JobPickSheet({ action, onClose }) {
       <div className="pick-list">
         {jobs.map(j => <button key={j.id} className="pick-row" onClick={() => go(j)}><span className="job-avatar small">{j.data.cover ? <img src={j.data.cover} alt="" /> : initials(j.data.name)}</span><span className="text"><b>{j.data.name || 'Untitled job'}</b><span>{j.data.client}</span></span><Icon name="right" size={20} /></button>)}
       </div>
-      <p className="small muted">For business payments not tied to a job, like van finance, use General cash flow on the home page.</p>
+      <p className="small muted">For business payments not tied to a job, like van finance, use Repeat payments on the home page.</p>
     </Sheet>
   )
 }
@@ -142,14 +142,44 @@ function TodayCard() {
   )
 }
 
+// Jobs in the order the owner set (newest unmoved jobs first, then the ones that have been moved)
+const sortJobs = (a, b) => {
+  const ao = a.data.order, bo = b.data.order
+  if (ao != null && bo != null) return ao - bo
+  if (ao != null) return 1
+  if (bo != null) return -1
+  return (b.data.created || '').localeCompare(a.data.created || '')
+}
+// Move a job one place up (-1) or down (+1) among the jobs on show
+function moveJob(id, dir, shown) {
+  const all = list('job').sort(sortJobs)
+  all.forEach((j, i) => { if (j.data.order !== i) update(j.id, { order: i }) })
+  const at = shown.findIndex(j => j.id === id), other = shown[at + dir]
+  if (at < 0 || !other) return
+  const a = all.findIndex(j => j.id === id), b = all.findIndex(j => j.id === other.id)
+  update(id, { order: b }); update(other.id, { order: a })
+}
+
+function ReorderRow({ job, first, last, onMove }) {
+  const d = job.data
+  return (
+    <div className="reorder-row">
+      <span className="job-avatar small">{d.cover ? <img src={d.cover} alt="" /> : initials(d.name)}</span>
+      <span className="text"><b>{d.name || 'Untitled job'}</b><span>{JOB_STATUS[jobStatus(d)]}{d.client ? ` · ${d.client}` : ''}</span></span>
+      <button className="move-btn" disabled={first} onClick={() => onMove(-1)} aria-label={`Move ${d.name || 'job'} up`}><Icon name="up" size={22} stroke={2.6} /></button>
+      <button className="move-btn" disabled={last} onClick={() => onMove(1)} aria-label={`Move ${d.name || 'job'} down`}><Icon name="down" size={22} stroke={2.6} /></button>
+    </div>
+  )
+}
+
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
 
 // Everything that needs attention across every job
 export default function Home() {
   const [filter, setFilter] = useState('active')
-  const jobs = useList('job', r => filter === 'all' || (filter === 'finished' ? r.data.status === 'finished' : r.data.status !== 'finished'),
-    (a, b) => (b.data.created || '').localeCompare(a.data.created || ''))
+  const jobs = useList('job', r => filter === 'all' || (filter === 'finished' ? r.data.status === 'finished' : r.data.status !== 'finished'), sortJobs)
   const allJobs = useList('job')
+  const [ordering, setOrdering] = useState(false)
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
   const [pick, setPick] = useState(null)
@@ -190,24 +220,29 @@ export default function Home() {
         </div>
         <BackupReminder />
         <TodayCard />
+        <div id="home-todo" className="anchor"><TodoList title="To-do" /></div>
+        <GeneralCashFlow />
+        <div className="home-tools">
+          <button className="btn ghost" onClick={() => nav('/contacts')}><Icon name="users" size={18} /> Contacts</button>
+          <button className="btn ghost" onClick={() => nav('/renewals')}><Icon name="shield" size={18} /> Renewals</button>
+          <button className="btn ghost" onClick={() => nav('/cashflow')}><Icon name="money" size={18} /> Repeat payments</button>
+        </div>
         <div className="section-head">
           <h2>Jobs</h2>
-          <button className="btn primary small" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> New job</button>
+          <div className="head-btns">
+            {jobs.length > 1 && <button className={'btn small ' + (ordering ? 'orange' : 'ghost')} onClick={() => setOrdering(o => !o)}>{ordering ? 'Done' : <><Icon name="up" size={16} /> Reorder</>}</button>}
+            {!ordering && <button className="btn primary small" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> New job</button>}
+          </div>
         </div>
         <div className="seg small" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
           {[['active', 'Current'], ['finished', 'Finished'], ['all', 'All']].map(([k, l]) => <button key={k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)}>{l}</button>)}
         </div>
         {jobs.length === 0
           ? <Empty icon="folder" title={filter === 'finished' ? 'No finished jobs' : 'No jobs yet'} text="Press New job to add one. Each job has its own pages for Materials, Money and Schedule, plus Documents, Invoices and more under More at the bottom of the job." />
-          : <div className="job-list">{jobs.map(j => <JobCard key={j.id} job={j} onLong={j => setEditing(j.id)} />)}</div>}
-        {jobs.length > 0 && <p className="hint">Tap a job to open it. Press and hold to change its details or status. Set a job to Finished to move it off this list.</p>}
-        <div id="home-todo" className="anchor"><TodoList title="To-do" /></div>
-        <GeneralCashFlow />
-        <div className="home-tools">
-          <button className="btn ghost" onClick={() => nav('/contacts')}><Icon name="users" size={18} /> Contacts</button>
-          <button className="btn ghost" onClick={() => nav('/renewals')}><Icon name="shield" size={18} /> Renewals</button>
-          <button className="btn ghost" onClick={() => nav('/cashflow')}><Icon name="money" size={18} /> Cash flow</button>
-        </div>
+          : ordering
+            ? <div className="reorder-list">{jobs.map((j, i) => <ReorderRow key={j.id} job={j} first={i === 0} last={i === jobs.length - 1} onMove={dir => moveJob(j.id, dir, jobs)} />)}</div>
+            : <div className="job-list">{jobs.map(j => <JobCard key={j.id} job={j} onLong={j => setEditing(j.id)} />)}</div>}
+        {jobs.length > 0 && <p className="hint">{ordering ? 'Use the arrows to put your most important jobs first. Tap Done when finished.' : 'Tap a job to open it. Press and hold to change its details or status. Tap Reorder to move jobs up or down.'}</p>}
       </main>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
       <NewJobSheet open={adding} onClose={() => setAdding(false)} />
