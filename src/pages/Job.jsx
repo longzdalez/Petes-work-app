@@ -1,35 +1,61 @@
 import { useState } from 'react'
-import { useRecord, update, useList } from '../store'
-import { Icon, TopBar, Field, Empty, PromptSheet } from '../ui'
+import { useRecord, update, useList, list } from '../store'
+import { Icon, TopBar, Field, Empty, PromptSheet, Sheet } from '../ui'
+import { ProfitRing, Glyph } from '../ui2'
 import { nav } from '../router'
-import { niceDate, money } from '../util'
+import { niceDate, money, today, shortDate } from '../util'
 import { JOB_STATUS, jobProgress, saveTemplate, smallImage, jobStatus } from '../jobs'
-import { pickFile } from '../files'
+import { pickFile, whatsApp } from '../files'
+import { jobMoney, thisWeek } from '../summary'
 import { TodoList } from '../Todos'
 
 export const TABS = [
   { key: '', label: 'Overview', icon: 'info' },
-  { key: 'docs', label: 'Documents', icon: 'docs' },
   { key: 'materials', label: 'Materials', icon: 'materials' },
   { key: 'money', label: 'Money', icon: 'money' },
   { key: 'schedule', label: 'Schedule', icon: 'schedule' },
-  { key: 'invoices', label: 'Invoices', icon: 'invoice' },
 ]
+// Everything else lives under More, so the tab bar stays roomy on a phone
+export const MORE = [
+  { key: 'docs', label: 'Documents', icon: 'docs' },
+  { key: 'invoices', label: 'Invoices & quotes', icon: 'invoice' },
+  { key: 'extras', label: 'Extras', icon: 'extra' },
+  { key: 'photos', label: 'Photo diary', icon: 'camera' },
+  { key: 'snags', label: 'Snagging', icon: 'snag' },
+  { key: 'hours', label: 'Hours', icon: 'clock' },
+  { key: 'todos', label: 'To-do', icon: 'check' },
+]
+const MORE_TABS = ['docs', 'invoices']
 
-export function JobShell({ job, tab, title, onBack, right, children }) {
+export function JobShell({ job, tab, title, onBack, right, children, hero }) {
+  const [more, setMore] = useState(false)
   if (!job) return <div className="page"><TopBar title="Job not found" onBack={() => nav('/')} /><Empty title="This job has been deleted" /></div>
+  const go = k => { setMore(false); nav(`/job/${job.id}${k ? '/' + k : ''}`) }
   return (
     <div className="page with-tabs">
-      <TopBar title={title || job.data.name || 'Job'} sub={title ? job.data.name : job.data.client} onBack={onBack || (() => nav('/'))} right={right} />
+      {hero || <TopBar title={title || job.data.name || 'Job'} sub={title ? job.data.name : job.data.client} onBack={onBack || (() => nav('/'))} right={right} />}
       <main className="content">{children}</main>
       <nav className="tabbar">
         {TABS.map(t => (
-          <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => nav(`/job/${job.id}${t.key ? '/' + t.key : ''}`)}>
+          <button key={t.key} className={tab === t.key ? 'on' : ''} onClick={() => go(t.key)}>
             <Icon name={t.icon} size={22} />
             <span>{t.label}</span>
           </button>
         ))}
+        <button className={MORE_TABS.includes(tab) ? 'on' : ''} onClick={() => setMore(true)}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="18.5" cy="12" r="2" /></svg>
+          <span>More</span>
+        </button>
       </nav>
+      <Sheet open={more} onClose={() => setMore(false)} title="More for this job">
+        <div className="more-grid">
+          {MORE.map(m => (
+            <button key={m.key} className={'more-tile' + (tab === m.key ? ' on' : '')} onClick={() => go(m.key)}>
+              <span className="hub-ic"><Icon name={m.icon} size={22} /></span>{m.label}
+            </button>
+          ))}
+        </div>
+      </Sheet>
     </div>
   )
 }
@@ -102,52 +128,122 @@ export function ScopeAndValue({ job, compact }) {
   )
 }
 
+// The job's work this week, Monday to Friday, in each trade's colour
+function WeekOnSite({ id }) {
+  const days = thisWeek()
+  const t = today()
+  const trades = useList('trade', r => r.job_id === id)
+  const tasks = useList('task', r => r.job_id === id && days.includes(r.data.date))
+  const colour = tk => trades.find(x => x.id === tk.data.trade_id)?.data.color || '#ff9f55'
+  const todays = tasks.filter(tk => tk.data.date === t)
+  return (
+    <section className="card">
+      <div className="card-head"><h2>This week on site</h2><button className="link-btn" onClick={() => nav(`/job/${id}/schedule`)}>Schedule</button></div>
+      <div className="week-strip">
+        {days.map(d => {
+          const cols = [...new Set(tasks.filter(tk => tk.data.date === d).map(colour))].slice(0, 3)
+          const dt = new Date(d + 'T00:00')
+          return (
+            <button key={d} className={'week-day' + (d === t ? ' on' : '')} onClick={() => nav(`/job/${id}/schedule`)}>
+              <span className="wd">{dt.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
+              <b>{dt.getDate()}</b>
+              <span className="wbars">{cols.map(c => <i key={c} style={{ background: c }} />)}</span>
+            </button>
+          )
+        })}
+      </div>
+      {tasks.length === 0
+        ? <p className="small muted" style={{ margin: '12px 0 0' }}>Nothing planned this week. Add work on the Schedule.</p>
+        : todays.length > 0 && <div className="today-work">
+          {todays.map(tk => {
+            const tr = trades.find(x => x.id === tk.data.trade_id)
+            return <div key={tk.id} className={tk.data.done ? 'done' : ''}><i style={{ background: colour(tk) }} /><span><b>{tr ? tr.data.name : 'Today'}</b>{tr?.data.trade ? ` ${tr.data.trade.toLowerCase()}` : ''} · {tk.data.text}</span></div>
+          })}
+        </div>}
+    </section>
+  )
+}
+
 export default function JobInfo({ id }) {
   const job = useRecord(id)
   const extras = useList('extra', r => r.job_id === id && r.data.status === 'pending')
   const snags = useList('snag', r => r.job_id === id && !r.data.done)
   const photos = useList('photo', r => r.job_id === id)
   const todos = useList('todo', r => r.job_id === id && !r.data.done)
+  useList('money', r => r.job_id === id)
+  useList('invoice', r => r.job_id === id)
   const [tpl, setTpl] = useState(false)
   if (!job) return <JobShell job={null} />
   const d = job.data
   const set = patch => update(job.id, patch)
   const prog = jobProgress(d)
+  const st = jobStatus(d)
+  const m = jobMoney(job)
   const go = p => nav(`/job/${id}/${p}`)
   const cover = async () => { const [f] = await pickFile({ accept: 'image/*' }); if (f) set({ cover: await smallImage(f, 900) }) }
-  return (
-    <JobShell job={job} tab="">
-      <div className="job-hero">
-        {d.cover && <img src={d.cover} alt="" onClick={cover} />}
-        <div className="job-hero-body">
-          <div className="small muted" style={{ fontWeight: 700, margin: '0 0 4px 2px' }}>Where is this job up to? Tap one:</div>
-          <div className="status-row">
-            {Object.entries(JOB_STATUS).map(([k, l]) => (
-              <button key={k} className={'chip' + (jobStatus(d) === k ? ' on' : '')} onClick={() => set({ status: k })}>{l}</button>
-            ))}
-          </div>
-          <div className="small muted" style={{ margin: '6px 0 0 2px' }}>{{ quoting: "You're still pricing this job up.", booked: 'The job is agreed and booked in.', onsite: "You're working on this job now.", finished: 'Done. It moves to the Finished list on the home page.' }[jobStatus(d)]}</div>
-          {prog && <>
-            <div className="progress"><div style={{ width: prog.pct + '%' }} /></div>
-            <div className="small muted" style={{ marginTop: 6 }}>{prog.label}{d.finish ? ` · finishes ${niceDate(d.finish, { noYear: true })}` : ''}</div>
-          </>}
-          {!d.cover && <button className="btn ghost small" style={{ marginTop: 10 }} onClick={cover}><Icon name="camera" size={16} /> Add a cover photo</button>}
-        </div>
+  const hero = (
+    <header className="job-cover">
+      {d.cover ? <img src={d.cover} alt="" /> : <div className="job-cover-blank">{(d.name || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()}</div>}
+      <div className="job-cover-shade" />
+      <div className="job-cover-top">
+        <button className="cover-btn" onClick={() => nav('/')} aria-label="Back to jobs"><Icon name="back" size={24} /></button>
+        <button className="cover-btn" onClick={cover} aria-label={d.cover ? 'Change cover photo' : 'Add a cover photo'}><Icon name="camera" size={20} /></button>
       </div>
+      <div className="job-cover-text">
+        <span className={'status-pill on-cover st-' + st}>{JOB_STATUS[st]}</span>
+        <h1>{d.name || 'Untitled job'}</h1>
+        {(d.client || d.address) && <div className="sub">{[d.client, d.address?.split('\n')[0]].filter(Boolean).join(' · ')}</div>}
+      </div>
+    </header>
+  )
+  return (
+    <JobShell job={job} tab="" hero={hero}>
+      <section className="card money-glance">
+        <div className="mg-top">
+          {m.quote > 0 ? <ProfitRing pct={m.left} size={86} sub="profit left" /> : <div className="mg-noquote">Add the job value in Scope of works to see the profit ring</div>}
+          <div className="mg-grid">
+            <div><span>{d.valueType === 'estimate' ? 'Estimate' : 'Quote'}</span><b>{m.quote ? money(m.quote) : '–'}</b></div>
+            <div><span>Spent</span><b className="neg">{money(m.spent)}</b></div>
+            <div><span>Paid to you</span><b className="pos">{money(m.paidIn)}</b></div>
+            <div><span>Still owed</span><b className="pos">{money(m.owed)}</b></div>
+          </div>
+        </div>
+        {m.warn && <div className="budget-warn"><Glyph name="warn" size={18} /> Costs are eating the profit: {money(m.spent)} spent so far</div>}
+        {prog && <>
+          <div className="progress big"><div style={{ width: prog.pct + '%' }} /></div>
+          <div className="mg-prog"><span>{prog.label}</span>{d.finish && <span className="muted">Finishes {niceDate(d.finish, { noYear: true })}</span>}</div>
+        </>}
+      </section>
+
+      <div className="small muted status-q">Where is this job up to?</div>
+      <div className="status-grid">
+        {Object.entries(JOB_STATUS).map(([k, l]) => (
+          <button key={k} className={st === k ? 'on' : ''} onClick={() => set({ status: k })}>{l}</button>
+        ))}
+      </div>
+      <div className="small muted status-help">{{ quoting: "You're still pricing this job up.", booked: 'The job is agreed and booked in.', onsite: "You're working on this job now.", finished: 'Done. It moves to the Finished list on the home page.' }[st]}</div>
 
       <div className="hub">
         <HubTile icon="extra" label="Extras" badge={extras.length} orange onClick={() => go('extras')} />
         <HubTile icon="camera" label="Photo diary" badge={0} onClick={() => go('photos')} />
-        <HubTile icon="snag" label="Snagging" badge={snags.length} onClick={() => go('snags')} />
-        <HubTile icon="clock" label="Hours" onClick={() => go('hours')} />
-        <HubTile icon="copy" label="Save as template" onClick={() => setTpl(true)} />
         <HubTile icon="check" label="To-do" badge={todos.length} onClick={() => go('todos')} />
+        <HubTile icon="clock" label="Hours" onClick={() => go('hours')} />
+        <HubTile icon="snag" label="Snagging" badge={snags.length} onClick={() => go('snags')} />
+        <HubTile icon="copy" label="Save as template" onClick={() => setTpl(true)} />
       </div>
       {photos.length > 0 && <p className="hint" style={{ marginTop: -4 }}>{photos.length} progress photo{photos.length > 1 ? 's' : ''} in the diary</p>}
+
+      <WeekOnSite id={id} />
       <ScopeAndValue job={job} />
 
       <section className="card">
-        <div className="card-head"><h2>Job information</h2><span className="muted small">Created {niceDate(d.created)}</span></div>
+        <div className="card-head"><h2>Client</h2><span className="muted small">Job created {niceDate(d.created)}</span></div>
+        {(d.clientPhone || d.clientEmail || d.address) && <div className="contact-row">
+          {d.clientPhone && <a className="contact-act" href={`tel:${d.clientPhone}`}><span className="ca-ic green"><Icon name="phone" size={20} /></span>Call</a>}
+          {d.clientPhone && <button className="contact-act" onClick={() => whatsApp(d.clientPhone, '')}><span className="ca-ic wa"><Icon name="chat" size={20} /></span>WhatsApp</button>}
+          {d.clientEmail && <a className="contact-act" href={`mailto:${d.clientEmail}`}><span className="ca-ic orange"><Icon name="mail" size={20} /></span>Email</a>}
+          {d.address && <a className="contact-act" target="_blank" rel="noreferrer" href={`https://maps.google.com/?q=${encodeURIComponent(d.address)}`}><span className="ca-ic white"><Glyph name="pin" size={20} /></span>Directions</a>}
+        </div>}
         <Field label="Job name" value={d.name} onChange={v => set({ name: v })} />
         <Field label="Client name" value={d.client} onChange={v => set({ client: v })} />
         <div className="two">
@@ -159,8 +255,7 @@ export default function JobInfo({ id }) {
           <Field label="Start date" type="date" value={d.start} onChange={v => set({ start: v })} />
           <Field label="Finish date" type="date" value={d.finish} onChange={v => set({ finish: v })} />
         </div>
-        {d.address && <a className="btn ghost" target="_blank" rel="noreferrer" href={`https://maps.google.com/?q=${encodeURIComponent(d.address)}`}>Open in maps</a>}
-        {d.cover && <button className="btn ghost" style={{ marginLeft: 8 }} onClick={() => set({ cover: '' })}>Remove cover photo</button>}
+        {d.cover && <button className="btn ghost small" onClick={() => set({ cover: '' })}>Remove cover photo</button>}
       </section>
       <section className="card">
         <div className="card-head"><h2>Professional services</h2></div>
