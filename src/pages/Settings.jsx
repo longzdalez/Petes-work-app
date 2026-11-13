@@ -71,7 +71,7 @@ function AccountantCard() {
 export function useSettings() {
   const r = useRecord('settings')
   const d = r?.data || {}
-  return { ...d, owners: d.owners?.filter(Boolean).length ? d.owners.filter(Boolean) : ['Pete', 'Partner'], business: d.business || {} }
+  return { ...d, owners: d.owners?.filter(Boolean).length ? d.owners.filter(Boolean) : ['Pete', 'Brian'], business: d.business || {} }
 }
 const setS = patch => put('settings', patch, { id: 'settings' })
 
