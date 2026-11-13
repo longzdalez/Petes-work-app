@@ -15,6 +15,7 @@ import { daysUntil } from './Contacts'
 import { TodoList } from '../Todos'
 import { ScopeAndValue } from './Job'
 import { GeneralCashFlow } from './CashFlow'
+import { VehicleSheet, CarIcon } from '../Vehicle'
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -183,6 +184,7 @@ export default function Home() {
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
   const [pick, setPick] = useState(null)
+  const [car, setCar] = useState(false)
   const st = useStatus()
   const settings = useSettings()
   const editJob = jobs.find(j => j.id === editing)
@@ -215,6 +217,7 @@ export default function Home() {
         <div className="quick">
           <button onClick={() => setPick('scan')}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
           <button onClick={() => setPick('add')}><span className="q-ic green"><Icon name="money" size={24} /></span>Add money</button>
+          <button onClick={() => setCar(true)} aria-label="Vehicle costs: ULEZ, congestion, fuel, tickets"><span className="q-ic white"><CarIcon /></span></button>
           <button onClick={() => setAdding(true)}><span className="q-ic white"><Icon name="plus" size={24} /></span>New job</button>
           <button onClick={() => document.getElementById('home-todo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
         </div>
@@ -247,6 +250,7 @@ export default function Home() {
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
       <NewJobSheet open={adding} onClose={() => setAdding(false)} />
       <JobPickSheet action={pick} onClose={() => setPick(null)} />
+      <VehicleSheet open={car} onClose={() => setCar(false)} />
     </div>
   )
 }

@@ -3,7 +3,7 @@ import { useRecord, update, useList, list } from '../store'
 import { Icon, TopBar, Field, Empty, PromptSheet, Sheet } from '../ui'
 import { ProfitRing, Glyph } from '../ui2'
 import { nav } from '../router'
-import { niceDate, money, today, shortDate } from '../util'
+import { niceDate, money, today, shortDate, num } from '../util'
 import { JOB_STATUS, jobProgress, saveTemplate, smallImage, jobStatus } from '../jobs'
 import { pickFile, whatsApp } from '../files'
 import { jobMoney, thisWeek } from '../summary'
@@ -108,6 +108,10 @@ export function ScopeAndValue({ job, compact }) {
   const d = job.data
   const set = patch => update(job.id, patch)
   const vt = d.valueType || 'quote'
+  const clean = v => v === '' ? '' : Number(String(v).replace(/[£,\s]/g, '')) || 0
+  const hasSplit = d.valueMaterials !== undefined && d.valueMaterials !== '' || d.valueLabour !== undefined && d.valueLabour !== ''
+  // Job value = materials + labour
+  const setPart = (k, v) => { const p = { ...d, [k]: clean(v) }; set({ [k]: clean(v), value: num(p.valueMaterials) + num(p.valueLabour) }) }
   const body = <>
     <Field label={compact ? "Scope of works" : "What needs doing"} value={d.scope} onChange={v => set({ scope: v })} multiline rows={compact ? 4 : 6} placeholder="What needs doing on this job, e.g. strip out kitchen, move radiator, first and second fix electrics, plaster, fit units" />
     <label className="field"><span>Job value</span>
@@ -116,7 +120,12 @@ export function ScopeAndValue({ job, compact }) {
         <button className={vt === 'quote' ? 'on' : ''} onClick={() => set({ valueType: 'quote' })}>Quotation</button>
       </div>
     </label>
-    <Field label={vt === 'estimate' ? 'Estimate £' : 'Quotation £'} inputMode="decimal" value={d.value ?? ''} onChange={v => set({ value: v === '' ? '' : Number(String(v).replace(/[£,\s]/g, '')) || 0 })} placeholder="0.00" />
+    <div className="two">
+      <Field label="Materials £" inputMode="decimal" value={d.valueMaterials ?? ''} onChange={v => setPart('valueMaterials', v)} placeholder="0.00" />
+      <Field label="Labour £" inputMode="decimal" value={d.valueLabour ?? ''} onChange={v => setPart('valueLabour', v)} placeholder="0.00" />
+    </div>
+    <div className="worth-total"><span>{vt === 'estimate' ? 'Estimate' : 'Quotation'} total</span><b>{money(num(d.value))}</b></div>
+    {!hasSplit && num(d.value) > 0 && <p className="small muted" style={{ marginTop: -6 }}>Put in the materials and labour above and the total adds itself up.</p>}
     <Field label="Details (optional)" value={d.valueNotes} onChange={v => set({ valueNotes: v })} multiline rows={2} placeholder="e.g. Includes materials, excludes kitchen units" />
   </>
   if (compact) return body
@@ -208,6 +217,11 @@ export default function JobInfo({ id }) {
             <div><span>Still owed</span><b className="pos">{money(m.owed)}</b></div>
           </div>
         </div>
+        {m.quote > 0 && <div className="worth-row">
+          <div><span>Materials</span><b>{d.valueMaterials !== undefined && d.valueMaterials !== '' ? money(num(d.valueMaterials)) : '–'}</b></div>
+          <div><span>Labour</span><b>{d.valueLabour !== undefined && d.valueLabour !== '' ? money(num(d.valueLabour)) : '–'}</b></div>
+          <div><span>Job worth</span><b>{money(m.quote)}</b></div>
+        </div>}
         {m.warn && <div className="budget-warn"><Glyph name="warn" size={18} /> Costs are eating the profit: {money(m.spent)} spent so far</div>}
         {prog && <>
           <div className="progress big"><div style={{ width: prog.pct + '%' }} /></div>
