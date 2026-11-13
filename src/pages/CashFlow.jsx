@@ -4,6 +4,7 @@ import { put, update, remove, useList } from '../store'
 import { Icon, Sheet, Field, TopBar, Empty, confirmDelete } from '../ui'
 import { money, num, today, parseYmd, ymd, shortDate } from '../util'
 import { nav, back } from '../router'
+import { PayerToggle } from '../Vehicle'
 
 const REPEAT = [{ k: 'none', l: 'One-off' }, { k: 'weekly', l: 'Weekly' }, { k: 'monthly', l: 'Monthly' }, { k: 'yearly', l: 'Yearly' }]
 const repeatLabel = k => REPEAT.find(r => r.k === k)?.l || 'One-off'
@@ -54,6 +55,7 @@ function PaySheet({ entry, onClose }) {
       <label className="field"><span>How often?</span>
         <div className="seg small" style={{ gridTemplateColumns: 'repeat(4, 1fr)', margin: 0 }}>{REPEAT.map(r => <button key={r.k} className={d.repeat === r.k ? 'on' : ''} onClick={() => set({ repeat: r.k })}>{r.l}</button>)}</div>
       </label>
+      <label className="field"><span>Who pays it?</span><PayerToggle big value={d.payer || ''} onChange={p => set({ payer: p })} /></label>
       {d.repeat !== 'none' && <label className="field"><span>Last payment (leave empty if it keeps going)</span><input type="date" value={d.until || ''} onChange={e => set({ until: e.target.value })} /></label>}
       <div className="sheet-actions">
         {!isNew && <button className="btn danger" onClick={() => { if (confirmDelete('this payment')) { remove(entry.id); onClose() } }}><Icon name="trash" size={18} /></button>}
@@ -75,6 +77,7 @@ function OccRow({ o, onEdit }) {
       <button className={'tick' + (o.paid ? ' on' : '')} onClick={tick} aria-label={o.paid ? 'Not paid' : 'Mark paid'}>{o.paid && <Icon name="check" size={16} stroke={3} />}</button>
       <span className="text tap" onClick={() => onEdit(o.rec)}>{d.desc}<br />
         <span className={'small ' + (late ? 'neg' : 'muted')}>{late ? 'Was due ' : ''}{shortDate(o.date)}{d.repeat && d.repeat !== 'none' ? ` · ${repeatLabel(d.repeat).toLowerCase()}` : ''}</span></span>
+      <PayerToggle value={d.payer || ''} onChange={p => update(o.rec.id, { payer: p })} />
       <span className={'nowrap ' + (d.dir === 'in' ? 'pos' : 'neg')}>{d.dir === 'in' ? '+' : '−'}{money(d.amount)}</span>
     </div>
   )
@@ -136,6 +139,7 @@ export default function CashFlowPage() {
           {pays.map(p => (
             <div key={p.id} className="up-row tap" onClick={() => setEdit(p)}>
               <span className="text">{p.data.desc}<br /><span className="small muted">{repeatLabel(p.data.repeat)}{p.data.repeat === 'none' ? ` · ${shortDate(p.data.date)}` : ` from ${shortDate(p.data.date)}`}{p.data.until ? ` until ${shortDate(p.data.until)}` : ''}</span></span>
+              <PayerToggle value={p.data.payer || ''} onChange={v => update(p.id, { payer: v })} />
               <span className={'nowrap ' + (p.data.dir === 'in' ? 'pos' : 'neg')}>{p.data.dir === 'in' ? '+' : '−'}{money(p.data.amount)}</span>
             </div>
           ))}
