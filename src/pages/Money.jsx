@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { put, update, remove, useRecord, useList, list } from '../store'
 import { Icon, Sheet, Field, Empty, confirmDelete, Suggest } from '../ui'
 import { JobShell } from './Job'
@@ -232,6 +232,14 @@ export default function Money({ id }) {
       read: r.total ? `Read from the receipt: total ${money(r.total)}${r.vat ? `, VAT ${money(r.vat)}` : ', no VAT found'}. Please check it's right, then Save.` : "Couldn't read the total on this one. Please type it in.",
     })
   }
+  // Opened from the home page's Scan receipt / Add money buttons
+  useEffect(() => {
+    const q = location.hash.split('?')[1] || ''
+    if (!q) return
+    history.replaceState(null, '', location.pathname + location.search + location.hash.split('?')[0])
+    if (q.includes('do=scan')) setScanAsk(true)
+    else if (q.includes('do=add')) setEdit({ data: {} })
+  }, [])
   const paid = entries.filter(e => e.data.status !== 'upcoming')
   const invs = useList('invoice', r => r.job_id === id && r.data.type === 'invoice' && r.data.status !== 'paid' && r.data.due)
   const upcoming = [...entries.filter(e => e.data.status === 'upcoming'),
@@ -269,7 +277,7 @@ export default function Money({ id }) {
       {scanning && <p className="notice small" style={{ marginTop: -4 }}>{scanning} The first scan takes a little longer while the reader loads.</p>}
 
       <section className="card">
-        <div className="card-head"><h2>Invoices to pay</h2></div>
+        <div className="card-head"><h2>Bills to pay</h2></div>
         {toPay.length === 0
           ? <p className="muted small">Bills you still need to pay. Use Add money, choose Money out and Upcoming, and it shows here. Tick it when it's paid.</p>
           : toPay.map(e => (
