@@ -81,10 +81,30 @@ function StageSheet({ quote, job, onClose }) {
 export default function Invoices({ id }) {
   const job = useRecord(id)
   const invs = useList('invoice', r => r.job_id === id, (a, b) => b.data.created.localeCompare(a.data.created))
+  useList('money', r => r.job_id === id)
   if (!job) return <JobShell job={null} />
+  const sent = invs.filter(i => i.data.type === 'invoice' && i.data.status === 'sent')
+  const owed = sent.reduce((s, i) => s + invoiceTotals(i.data).total, 0)
+  const paidIn = list('money', r => r.job_id === id && r.data.dir === 'in' && r.data.status !== 'upcoming').reduce((s, r) => s + num(r.data.amount), 0)
+  const next = [...sent].filter(i => i.data.due).sort((a, b) => a.data.due.localeCompare(b.data.due))[0]
   const make = type => { const r = newInvoice(job, type); nav(`/job/${id}/invoice/${r.id}`) }
   return (
     <JobShell job={job} tab="invoices" title="Invoices & quotes">
+      <div className="stat-row">
+        <div className="stat"><span>Still owed</span><b className="pos">{money(owed)}</b><small className="muted">{sent.length} invoice{sent.length === 1 ? '' : 's'} sent</small></div>
+        <div className="stat"><span>Paid so far</span><b>{money(paidIn)}</b>{num(job.data.value) > 0 && <small className="muted">of {money(num(job.data.value))}</small>}</div>
+      </div>
+      {next && (() => {
+        const late = next.data.due < today()
+        const days = Math.round((new Date(next.data.due + 'T00:00') - new Date(today() + 'T00:00')) / 864e5)
+        return (
+          <button className={'due-banner' + (late ? ' late' : '')} onClick={() => nav(`/job/${id}/invoice/${next.id}`)}>
+            <span className="db-ic"><Icon name="clock" size={20} /></span>
+            <span className="db-text"><b>{next.data.number} {late ? `is ${-days} day${days === -1 ? '' : 's'} late` : days === 0 ? 'is due today' : `is due in ${days} day${days === 1 ? '' : 's'}`}</b><small>{money(invoiceTotals(next.data).total)} · tap to open{late ? ' and send a reminder' : ''}</small></span>
+            <Icon name="right" size={20} />
+          </button>
+        )
+      })()}
       <div className="two">
         <button className="btn primary big" onClick={() => make('invoice')}><Icon name="plus" size={18} /> New invoice</button>
         <button className="btn ghost big" onClick={() => make('quote')}><Icon name="plus" size={18} /> New quote</button>
