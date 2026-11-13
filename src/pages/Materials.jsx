@@ -56,6 +56,8 @@ export default function Materials({ id }) {
   const items = materialItems(id)
   const selF = folders.find(f => f.id === sel)
   const [naming, setNaming] = useState(false)
+  const [orderAll, setOrderAll] = useState(false)
+  const toGet = mats.filter(m => !m.data.done && m.data.text && folders.some(f => f.id === m.data.folder_id))
   const newFolder = () => setNaming(true)
   const counts = f => {
     const m = mats.filter(x => x.data.folder_id === f.id && !x.data.done && x.data.text)
@@ -63,6 +65,16 @@ export default function Materials({ id }) {
   }
   return (
     <JobShell job={job} tab="materials" title="Materials">
+      <div className="sum-tiles">
+        <div className="sum-tile red"><b>{toGet.filter(m => m.data.urgency === 'red').length}</b><span>Urgent</span></div>
+        <div className="sum-tile amber"><b>{toGet.filter(m => m.data.urgency === 'amber').length}</b><span>Soon</span></div>
+        <div className="sum-tile green"><b>{toGet.filter(m => m.data.urgency !== 'red' && m.data.urgency !== 'amber').length}</b><span>Not urgent</span></div>
+      </div>
+      <button className="big-action" disabled={!toGet.length} onClick={() => setOrderAll(true)}>
+        <span className="ba-ic"><Icon name="chat" size={22} /></span>
+        <span className="ba-text"><b>Send order to supplier</b><small>{toGet.length ? `${toGet.length} item${toGet.length > 1 ? 's' : ''} to get, grouped by supplier` : 'Nothing left to order'}</small></span>
+        <Icon name="right" size={20} />
+      </button>
       <div className="section-head">
         <h2>Folders</h2>
         <button className="btn primary" onClick={newFolder}><Icon name="plus" size={18} /> New folder</button>
@@ -91,6 +103,7 @@ export default function Materials({ id }) {
         saveLabel="Create folder" onSave={n => put('folder', { name: n || 'New folder', order: folders.length }, { job_id: id })} />
       <DayList date={day} jobId={id} items={items.filter(i => i.date === day)} onClose={() => setDay(null)} />
 
+      {orderAll && <SupplierOrderSheet job={job} rows={toGet} onClose={() => setOrderAll(false)} />}
       {selF && (
         <Sheet open onClose={() => setSel(null)} title="Folder">
           <div className="created">Created {niceDate(selF.data.created)}</div>
@@ -158,6 +171,37 @@ function MaterialRow({ m, autoFocus, onEnter }) {
         <button className="btn danger wide" style={{ marginTop: 4 }} onClick={() => { remove(m.id); setPick(false) }}><Icon name="trash" size={18} /> Delete this item</button>
       </UrgencyPicker>
     </SwipeRow>
+  )
+}
+
+// Every item still to get on this job, grouped by supplier, each group ready to send
+function SupplierOrderSheet({ job, rows, onClose }) {
+  const contacts = list('contact', c => c.data.role === 'supplier')
+  const groups = {}
+  rows.forEach(r => { const k = (r.data.supplier || '').trim() || 'No supplier set'; (groups[k] ||= []).push(r) })
+  const names = Object.keys(groups).sort((a, b) => (a === 'No supplier set') - (b === 'No supplier set') || a.localeCompare(b))
+  const textFor = items => `Hi, can I order the following please${job.data.name ? ` for ${job.data.name}` : ''}:\n\n` +
+    items.map(r => `• ${r.data.qty ? r.data.qty + ' x ' : ''}${r.data.text}${r.data.date ? ` (needed ${shortDate(r.data.date)})` : ''}`).join('\n') +
+    (job.data.address ? `\n\nDeliver to: ${job.data.address}` : '') + '\n\nThanks'
+  const done = items => { if (confirm('Tick these off as ordered?')) items.forEach(r => update(r.id, { done: true, doneOn: new Date().toISOString().slice(0, 10) })) }
+  return (
+    <Sheet open onClose={onClose} title="Send order to supplier">
+      {names.map(n => {
+        const items = groups[n]
+        const c = contacts.find(c => [c.data.company, c.data.name].filter(Boolean).some(x => x.toLowerCase() === n.toLowerCase()))
+        return (
+          <div key={n} className="supplier-group">
+            <h3><span>{n}</span><span className="pill">{items.length}</span></h3>
+            <ul>{items.map(r => <li key={r.id}>{r.data.qty ? `${r.data.qty} x ` : ''}{r.data.text}{r.data.urgency === 'red' ? ' (urgent)' : ''}</li>)}</ul>
+            <div className="btns">
+              {c?.data.phone && <button className="btn primary small" onClick={() => { whatsApp(c.data.phone, textFor(items)); done(items) }}><Icon name="chat" size={16} /> WhatsApp {c.data.company || c.data.name}</button>}
+              <button className={'btn small ' + (c?.data.phone ? 'ghost' : 'primary')} onClick={async () => { await shareText(textFor(items), 'Materials order'); done(items) }}><Icon name="share" size={16} /> Send</button>
+            </div>
+          </div>
+        )
+      })}
+      <p className="small muted">Set the supplier on each item (tap its colour box). Add your merchants in Contacts as Suppliers with a phone number for one-tap WhatsApp.</p>
+    </Sheet>
   )
 }
 
