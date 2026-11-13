@@ -9,3 +9,25 @@
 .move-btn:active { background: var(--g200); }
 .move-btn:disabled { opacity: .3; }
 .home-tools .btn { white-space: normal; line-height: 1.15; text-align: center; min-height: 52px; }
+
+/* Who pays (B/P), vehicle costs, job worth */
+.payer-toggle { display: inline-flex; gap: 4px; flex-shrink: 0; }
+.payer-toggle button { width: 30px; height: 30px; border-radius: 10px; border: 1.5px solid var(--line); background: #fff; color: var(--muted); font-size: 13px; font-weight: 900; padding: 0; }
+.payer-toggle button.on { background: var(--g700); border-color: var(--g700); color: #fff; }
+.payer-toggle.big button { width: 44px; height: 44px; border-radius: 14px; font-size: 16px; }
+.payer-chip { width: 24px; height: 24px; border-radius: 8px; background: var(--g100); color: var(--g700); font-size: 12px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.quick { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.quick .q-ic { width: 54px; height: 54px; }
+.veh-list { display: flex; flex-direction: column; gap: 8px; }
+.veh-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 18px; background: #fff; }
+.veh-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 800; }
+.veh-amt { display: flex; align-items: center; gap: 4px; width: 96px; flex-shrink: 0; border: 1.5px solid var(--line); border-radius: 14px; padding: 0 10px; background: #f7fbf8; }
+.veh-amt span { font-weight: 800; color: var(--muted); }
+.veh-amt input { width: 100%; min-width: 0; border: 0; background: none; height: 44px; font-size: 16px; font-weight: 700; padding: 0; outline: none; }
+.worth-total { display: flex; justify-content: space-between; align-items: center; background: var(--orange-soft); border-radius: 16px; padding: 12px 14px; margin: 0 0 14px; box-shadow: 0 0 0 1px #ffe0c4; }
+.worth-total span { font-weight: 800; color: #8a4512; }
+.worth-total b { font-size: 19px; font-weight: 900; }
+.worth-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 12px; background: #f4f9f6; border-radius: 16px; padding: 10px 12px; }
+.worth-row span { display: block; font-size: 12px; font-weight: 800; color: #5d7067; }
+.worth-row b { display: block; font-size: 15px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.worth-row div:last-child b { color: var(--g700); }
