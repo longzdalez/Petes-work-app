@@ -97,7 +97,8 @@ function JobCard({ job, onLong }) {
           {prog && st !== 'finished' ? <>
             <div className="progress"><div style={{ width: prog.pct + '%' }} /></div>
             <div className="job-start">{prog.label}</div>
-          </> : d.start && <div className="job-start">Starts {niceDate(d.start)}</div>}
+          </> : st === 'finished' ? (d.finish && <div className="job-start">Finished {niceDate(d.finish)}</div>)
+            : d.start && <div className="job-start">Starts {niceDate(d.start)}</div>}
         </div>
         {m.quote > 0 && <div className="jc-ring"><ProfitRing pct={m.left} /><span>{m.spent ? 'left of ' : 'of '}{shortMoney(m.quote)}</span></div>}
       </div>
@@ -173,13 +174,32 @@ function ReorderRow({ job, first, last, onMove }) {
   )
 }
 
+// The Finished jobs folder: every job set to Finished, newest first
+export function FinishedJobs() {
+  const jobs = useList('job', r => r.data.status === 'finished', (a, b) => (b.data.finish || b.data.created || '').localeCompare(a.data.finish || a.data.created || ''))
+  const [editing, setEditing] = useState(null)
+  const editJob = jobs.find(j => j.id === editing)
+  return (
+    <div className="page">
+      <TopBar title="Finished jobs" sub={`${jobs.length} job${jobs.length === 1 ? '' : 's'}`} onBack={() => nav('/')} />
+      <main className="content">
+        {jobs.length === 0
+          ? <Empty icon="folder" title="No finished jobs yet" text="When a job is done, set it to Finished and it moves into this folder." />
+          : <div className="job-list">{jobs.map(j => <JobCard key={j.id} job={j} onLong={j => setEditing(j.id)} />)}</div>}
+        {jobs.length > 0 && <p className="hint">Tap a job to open it. Hold it to change its details. Set it back to On site to move it out of this folder.</p>}
+      </main>
+      <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
+    </div>
+  )
+}
+
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
 
 // Everything that needs attention across every job
 export default function Home() {
-  const [filter, setFilter] = useState('active')
-  const jobs = useList('job', r => filter === 'all' || (filter === 'finished' ? r.data.status === 'finished' : r.data.status !== 'finished'), sortJobs)
+  const jobs = useList('job', r => r.data.status !== 'finished', sortJobs)
   const allJobs = useList('job')
+  const finished = allJobs.filter(j => j.data.status === 'finished')
   const [ordering, setOrdering] = useState(false)
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
@@ -237,15 +257,18 @@ export default function Home() {
             {!ordering && <button className="btn primary small" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> New job</button>}
           </div>
         </div>
-        <div className="seg small" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-          {[['active', 'Current'], ['finished', 'Finished'], ['all', 'All']].map(([k, l]) => <button key={k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)}>{l}</button>)}
-        </div>
         {jobs.length === 0
-          ? <Empty icon="folder" title={filter === 'finished' ? 'No finished jobs' : 'No jobs yet'} text="Press New job to add one. Each job has its own pages for Materials, Money and Schedule, plus Documents, Invoices and more under More at the bottom of the job." />
+          ? <Empty icon="folder" title={finished.length ? 'No current jobs' : 'No jobs yet'} text="Press New job to add one. Each job has its own pages for Materials, Money and Schedule, plus Documents, Invoices and more under More at the bottom of the job." />
           : ordering
             ? <div className="reorder-list">{jobs.map((j, i) => <ReorderRow key={j.id} job={j} first={i === 0} last={i === jobs.length - 1} onMove={dir => moveJob(j.id, dir, jobs)} />)}</div>
             : <div className="job-list">{jobs.map(j => <JobCard key={j.id} job={j} onLong={j => setEditing(j.id)} />)}</div>}
-        {jobs.length > 0 && <p className="hint">{ordering ? 'Use the arrows to put your most important jobs first. Tap Done when finished.' : 'Tap a job to open it. Press and hold to change its details or status. Tap Reorder to move jobs up or down.'}</p>}
+        {jobs.length > 0 && <p className="hint">{ordering ? 'Use the arrows to put your most important jobs first. Tap Done when finished.' : 'Tap a job to open it. Press and hold to change its details or status. Tap Reorder to move jobs up or down. Finished jobs go into the folder below.'}</p>}
+        {!ordering && <button className="finished-folder" onClick={() => nav('/finished')}>
+          <span className="ff-ic"><Icon name="folder" size={26} /></span>
+          <span className="ff-text"><b>Finished jobs</b><small>{finished.length ? `${finished.length} job${finished.length === 1 ? '' : 's'} done` : 'Jobs set to Finished go in here'}</small></span>
+          <span className="pill">{finished.length}</span>
+          <Icon name="right" size={20} />
+        </button>}
       </main>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
       <NewJobSheet open={adding} onClose={() => setAdding(false)} />

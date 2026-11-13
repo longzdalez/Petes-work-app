@@ -4,7 +4,7 @@ import './redesign.css'
 import './redesign2.css'
 import { initCloud, cloudEnabled, useStatus, keepStorage } from './store'
 import { useRoute } from './router'
-import Home from './pages/Home'
+import Home, { FinishedJobs } from './pages/Home'
 import JobInfo, { JobTodos } from './pages/Job'
 import Docs from './pages/Docs'
 import Materials, { Folder } from './pages/Materials'
@@ -60,6 +60,7 @@ function App() {
   else if (r[0] === 'renewals') page = <Renewals />
   else if (r[0] === 'search') page = <Search />
   else if (r[0] === 'cashflow') page = <CashFlowPage />
+  else if (r[0] === 'finished') page = <FinishedJobs />
   else page = <Home />
   return <>
     {page}

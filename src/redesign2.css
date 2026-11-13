@@ -31,3 +31,10 @@
 .worth-row span { display: block; font-size: 12px; font-weight: 800; color: #5d7067; }
 .worth-row b { display: block; font-size: 15px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .worth-row div:last-child b { color: var(--g700); }
+
+/* Finished jobs folder */
+.finished-folder { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin: 6px 0 14px; border-radius: 22px; border: 2px solid #fff; background: #fff3e8; color: inherit; text-align: left; box-shadow: 0 0 0 1px #ffd9b8, 0 8px 20px rgba(31, 77, 58, .08); }
+.finished-folder .ff-ic { width: 48px; height: 48px; border-radius: 16px; background: var(--orange); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.finished-folder .ff-text { flex: 1; min-width: 0; }
+.finished-folder b { display: block; font-size: 16px; font-weight: 900; }
+.finished-folder small { display: block; font-size: 13px; font-weight: 700; color: #8a4512; }
