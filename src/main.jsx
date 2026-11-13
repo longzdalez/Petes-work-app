@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import './styles.css'
+import './redesign.css'
 import { initCloud, cloudEnabled, useStatus, keepStorage } from './store'
 import { useRoute } from './router'
 import Home from './pages/Home'
