@@ -51,7 +51,7 @@ export function todayItems() {
     out.push({ id: r.id, order: 3, label: 'Order', urgent: true, color: URGENCY.red.color, title: (r.data.qty ? r.data.qty + ' x ' : '') + r.data.text, sub: [`Needed ${r.data.date === t ? 'today' : shortDate(r.data.date)}`, jobName(r)].filter(Boolean).join(' · '), url: `/job/${r.job_id}/folder/${r.data.folder_id}` })
   })
   list('genpay').forEach(rec => occurrences(rec, t, t).filter(o => !o.paid).forEach(o => {
-    out.push({ id: rec.id + o.date, order: 4, label: rec.data.dir === 'in' ? 'Due' : 'Pay', color: '#3b9268', title: rec.data.desc, sub: 'General cash flow', amount: num(rec.data.amount), dir: rec.data.dir || 'out', url: '/cashflow' })
+    out.push({ id: rec.id + o.date, order: 4, label: rec.data.dir === 'in' ? 'Due' : 'Pay', color: '#3b9268', title: rec.data.desc, sub: 'Repeat payments', amount: num(rec.data.amount), dir: rec.data.dir || 'out', url: '/cashflow' })
   }))
   list('money', r => r.data.status === 'upcoming' && r.data.date && r.data.date <= t && live(r)).forEach(r => {
     out.push({ id: r.id, order: 4, label: r.data.dir === 'in' ? 'Due' : 'Pay', late: r.data.date < t, color: '#3b9268', title: r.data.desc || (r.data.dir === 'in' ? 'Money due in' : 'Bill to pay'), sub: jobName(r), amount: num(r.data.amount), dir: r.data.dir, url: `/job/${r.job_id}/money` })
