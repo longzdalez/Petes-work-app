@@ -1,0 +1,32 @@
+# Builds the app and publishes it to the gh-pages branch (what GitHub Pages serves)
+# every time the code on main changes. Can also be run by hand from the Actions tab.
+name: Publish app
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'public/**', 'index.html', 'package.json', 'package-lock.json', 'vite.config.js', '.github/workflows/deploy.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vite build
+      - name: Push the built app to gh-pages
+        run: |
+          cd dist
+          touch .nojekyll
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "Deploy ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
