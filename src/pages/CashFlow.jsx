@@ -5,6 +5,7 @@ import { Icon, Sheet, Field, TopBar, Empty, confirmDelete } from '../ui'
 import { money, num, today, parseYmd, ymd, shortDate } from '../util'
 import { nav, back } from '../router'
 import { PayerToggle } from '../Vehicle'
+import { isLocked, lockMsg } from '../ledger'
 
 const REPEAT = [{ k: 'none', l: 'One-off' }, { k: 'weekly', l: 'Weekly' }, { k: 'monthly', l: 'Monthly' }, { k: 'yearly', l: 'Yearly' }]
 const repeatLabel = k => REPEAT.find(r => r.k === k)?.l || 'One-off'
@@ -37,6 +38,7 @@ function PaySheet({ entry, onClose }) {
   const save = () => {
     if (!num(d.amount)) return alert('Please put in an amount')
     if (!d.desc.trim()) return alert('Please say what it is for')
+    if (!d.payer) return alert('Tap B, P or Biz to say who pays it')
     const data = { ...d, amount: num(d.amount), desc: d.desc.trim() }
     if (isNew) put('genpay', { ...data, paid: [] }, { job_id: null }); else update(entry.id, data)
     onClose()
@@ -55,7 +57,7 @@ function PaySheet({ entry, onClose }) {
       <label className="field"><span>How often?</span>
         <div className="seg small" style={{ gridTemplateColumns: 'repeat(4, 1fr)', margin: 0 }}>{REPEAT.map(r => <button key={r.k} className={d.repeat === r.k ? 'on' : ''} onClick={() => set({ repeat: r.k })}>{r.l}</button>)}</div>
       </label>
-      <label className="field"><span>Who pays it?</span><PayerToggle big value={d.payer || ''} onChange={p => set({ payer: p })} /></label>
+      <label className="field"><span>Who pays it?</span><PayerToggle big biz value={d.payer || ''} onChange={p => set({ payer: p })} /></label>
       {d.repeat !== 'none' && <label className="field"><span>Last payment (leave empty if it keeps going)</span><input type="date" value={d.until || ''} onChange={e => set({ until: e.target.value })} /></label>}
       <div className="sheet-actions">
         {!isNew && <button className="btn danger" onClick={() => { if (confirmDelete('this payment')) { remove(entry.id); onClose() } }}><Icon name="trash" size={18} /></button>}
@@ -69,6 +71,7 @@ function OccRow({ o, onEdit }) {
   const d = o.rec.data
   const late = !o.paid && o.date < today()
   const tick = () => {
+    if (isLocked(o.date)) return alert(lockMsg(o.date))
     const paid = d.paid || []
     update(o.rec.id, { paid: o.paid ? paid.filter(x => x !== o.date) : [...paid, o.date] })
   }
