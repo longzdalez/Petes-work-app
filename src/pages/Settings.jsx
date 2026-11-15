@@ -4,7 +4,7 @@ import { Icon, TopBar, Field } from '../ui'
 import { nav, back } from '../router'
 import { BackupCard } from '../Backup'
 import { accountantCsv } from './Money'
-import { shareOrDownload } from '../files'
+import { shareOrDownload, shareText } from '../files'
 import { canNotify, remindersOn, enableReminders, disableReminders } from '../reminders'
 
 function RemindersCard() {
@@ -125,6 +125,12 @@ export default function Settings() {
           <span><b>How to use the app</b><br /><span className="small muted">Simple steps for everything</span></span>
           <Icon name="right" size={20} />
         </button>
+        <section className="card">
+          <div className="card-head"><h2>Put the app on another phone</h2></div>
+          <p className="small muted" style={{ marginTop: 0 }}>Send the link to the other phone. Open it in Chrome (or the Huawei browser), tap the <b>⋮ menu</b> then <b>Add to Home screen</b> or <b>Install app</b>{cloudEnabled ? ', then sign in with your shared login to see the same jobs' : ''}.</p>
+          <p className="notice small" style={{ wordBreak: 'break-all' }}>{location.origin + location.pathname.replace(/index\.html$/, '')}</p>
+          <button className="btn primary wide" onClick={() => shareText(`BP Builders app: ${location.origin + location.pathname.replace(/index\.html$/, '')}\nOpen it in Chrome, tap the ⋮ menu, then "Add to Home screen" or "Install app".${cloudEnabled ? ' Then sign in with our shared login.' : ''}`, 'BP Builders app')}><Icon name="share" size={18} /> Send the link</button>
+        </section>
         <section className="card">
           <div className="card-head"><h2>Sharing between phones</h2></div>
           {!cloudEnabled && <p className="small muted">Live sharing isn't switched on yet. Everything is saved on this phone for now and will be uploaded once it's set up.</p>}

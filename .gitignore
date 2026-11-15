@@ -1,2 +1,5 @@
 node_modules
 dist
+
+# Made from icons/*.svg by scripts/make-icons.sh (the publish workflow runs it)
+public/icons/*.png
