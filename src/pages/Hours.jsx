@@ -5,6 +5,7 @@ import { JobShell } from './Job'
 import { nav } from '../router'
 import { money, num, niceDate, today, parseYmd, ymd } from '../util'
 import { useSettings } from './Settings'
+import { WhoPaidSheet } from '../Vehicle'
 
 const weekStart = s => { const d = parseYmd(s); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return ymd(d) }
 
@@ -96,6 +97,7 @@ export default function Hours({ id }) {
   const entries = useList('hours', r => r.job_id === id, (a, b) => b.data.date.localeCompare(a.data.date))
   const [edit, setEdit] = useState(null)
   const [pick, setPick] = useState(null)
+  const [paying, setPaying] = useState(null)
   if (!job) return <JobShell job={null} />
   const known = [...new Set([...settings.owners, ...list('trade').map(t => t.data.name), ...list('hours').map(h => h.data.person), ...list('contact', c => c.data.role === 'trade').map(c => c.data.name)].filter(Boolean))].slice(0, 14)
   const unpaid = {}
@@ -105,9 +107,10 @@ export default function Hours({ id }) {
     u.what.push(howLong(e.data)); if (e.data.payBy) u.payBy.push(e.data.payBy)
   })
   Object.values(unpaid).forEach(u => { if (u.what.length > 3) u.what = [`${u.what.length} entries`] })
-  const pay = (person, u) => {
-    if (!confirm(`Pay ${person} ${money(u.cost)}? This adds it to Money.`)) return
-    const m = put('money', { dir: 'out', cat: settings.owners.includes(person) ? 'wages' : 'contractor', person, amount: Math.round(u.cost * 100) / 100, date: today(), desc: u.what.join(', '), status: 'paid' }, { job_id: id })
+  const pay = (person, u) => setPaying({ person, u })
+  const doPay = (payer) => {
+    const { person, u } = paying; setPaying(null)
+    const m = put('money', { dir: 'out', cat: settings.owners.includes(person) ? 'wages' : 'contractor', person, payer, amount: Math.round(u.cost * 100) / 100, date: today(), desc: u.what.join(', '), status: 'paid' }, { job_id: id })
     u.ids.forEach(i => update(i, { paid: true, money_id: m.id }))
   }
   const editOwed = u => u.entries.length === 1 ? setEdit(u.entries[0]) : setPick(u)
@@ -132,6 +135,7 @@ export default function Hours({ id }) {
         {pick.entries.map(e => <EntryRow key={e.id} e={e} onEdit={() => { setPick(null); setEdit(e) }} />)}
       </Sheet>}
       {edit && <HoursSheet entry={edit} jobId={id} people={known} onClose={() => setEdit(null)} />}
+    {paying && <WhoPaidSheet title={`Pay ${paying.person} ${money(paying.u.cost)}`} text="This adds it to Money. Who's paying it?" onPick={doPay} onClose={() => setPaying(null)} />}
     </JobShell>
   )
 }

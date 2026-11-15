@@ -120,6 +120,11 @@ export default function Settings() {
     <div className="page">
       <TopBar title="Settings" onBack={() => back('/')} />
       <main className="content">
+        <button className="card help-link" onClick={() => nav('/help')}>
+          <span className="q-ic green"><Icon name="docs" size={24} /></span>
+          <span><b>How to use the app</b><br /><span className="small muted">Simple steps for everything</span></span>
+          <Icon name="right" size={20} />
+        </button>
         <section className="card">
           <div className="card-head"><h2>Sharing between phones</h2></div>
           {!cloudEnabled && <p className="small muted">Live sharing isn't switched on yet. Everything is saved on this phone for now and will be uploaded once it's set up.</p>}

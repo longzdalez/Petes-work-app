@@ -18,7 +18,7 @@ export function allItems(owners) {
     let kind = d.dir === 'in' ? 'income' : 'expense'
     if (d.cat === 'transfer') kind = 'transfer'
     else if (d.dir === 'out' && d.cat === 'wages' && owners.includes(d.person)) kind = 'drawing'
-    out.push({ key: r.id, id: r.id, src: 'money', kind, amount: a, date: d.date || '', desc: d.desc || '', cat: d.cat, payer: payerOf(d), to: d.person || '', job: r.job_id, jobName: jobs[r.job_id] || '' })
+    out.push({ key: r.id, id: r.id, src: 'money', kind, amount: a, date: d.date || '', desc: d.desc || '', cat: d.cat, payer: payerOf(d), to: d.person || '', job: r.job_id, jobName: jobs[r.job_id] || '', receipt: !!d.receipt, vtype: d.vtype || '', vat: num(d.vat), cis: d.cat === 'contractor' && num(d.cisRate) ? Math.round(num(d.cisLabour || d.amount) * num(d.cisRate)) / 100 : 0 })
   })
   list('genpay').forEach(r => {
     const d = r.data, a = num(d.amount)
@@ -35,8 +35,8 @@ export function tally(items, owners) {
   let moneyIn = 0, moneyOut = 0, unmarked = 0
   items.forEach(it => {
     const a = it.amount
-    if (it.kind === 'expense') { moneyOut += a; if (isOwner(it.payer)) acc[it.payer].putIn += a; else unmarked++ }
-    else if (it.kind === 'income') { moneyIn += a; if (isOwner(it.payer)) acc[it.payer].received += a; else unmarked++ }
+    if (it.kind === 'expense') { moneyOut += a; if (isOwner(it.payer)) acc[it.payer].putIn += a; else if (!it.payer) unmarked++ }
+    else if (it.kind === 'income') { moneyIn += a; if (isOwner(it.payer)) acc[it.payer].received += a; else if (!it.payer) unmarked++ }
     else if (it.kind === 'drawing') { acc[it.to].drew += a; if (isOwner(it.payer)) acc[it.payer].sent += a }
     else if (it.kind === 'transfer') { if (isOwner(it.payer)) acc[it.payer].sent += a; if (isOwner(it.to)) acc[it.to].got += a }
   })
@@ -71,4 +71,25 @@ export function settle(people, fmt) {
     lines.push(`Nobody owes the other. ${bits.join(' and ').replace(/^./, c => c.toUpperCase())}.`)
   }
   return { lines, pay }
+}
+
+// Settled months can be locked so nothing in them changes by accident
+export const lockedUntil = () => list('settings')[0]?.data?.lockedUntil || ''
+export const isLocked = date => { const l = lockedUntil(); return !!(l && date && date <= l) }
+export const lockMsg = date => `Payments up to ${niceUk(lockedUntil())} are locked because that month has been settled. Unlock it in the Money centre first if you really need to change this.`
+const niceUk = s => s ? new Date(s + 'T12:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+
+// Another payment with the same amount and either the same description or within 3 days
+export function findDuplicate({ amount, desc, date, id }) {
+  const a = num(amount), dsc = (desc || '').trim().toLowerCase()
+  if (!a) return null
+  const day = s => new Date((s || '') + 'T12:00').getTime()
+  return list('money', r => r.id !== id && r.data.cat !== 'transfer' && Math.abs(num(r.data.amount) - a) < 0.005 &&
+    ((dsc && (r.data.desc || '').trim().toLowerCase() === dsc) || Math.abs(day(r.data.date) - day(date)) <= 3 * 864e5))[0] || null
+}
+
+// UK tax year containing a date: 6 April to 5 April
+export function taxYear(date = today()) {
+  const y = +date.slice(0, 4), start = date >= `${y}-04-06` ? y : y - 1
+  return { from: `${start}-04-06`, to: `${start + 1}-04-05`, label: `${start}/${String(start + 1).slice(2)}` }
 }
