@@ -91,18 +91,27 @@ function schedulePush() {
   pushTimer = setTimeout(push, 400)
 }
 
+// Sends unsent changes in batches (the first sign-in on a phone that's been used offline can have thousands).
+// A record changed again while its batch was sending stays pending and goes in the next push.
+let pushing = false
 async function push() {
-  if (!status.signedIn || !navigator.onLine) return
-  const ids = Object.keys(pending)
-  if (!ids.length) return
-  const rows = ids.map(id => records[id]).filter(Boolean).map(r => ({
-    id: r.id, kind: r.kind, job_id: r.job_id, data: r.data, deleted: r.deleted,
-  }))
-  const { error } = await supabase.from('records').upsert(rows)
-  if (error) { status.error = error.message; emit(); return }
-  ids.forEach(id => delete pending[id])
-  status.error = ''
-  save(); emit()
+  if (!status.signedIn || !navigator.onLine || pushing) return
+  pushing = true
+  try {
+    const ids = Object.keys(pending).filter(id => records[id])
+    Object.keys(pending).forEach(id => { if (!records[id]) delete pending[id] })
+    for (let i = 0; i < ids.length; i += 200) {
+      const batch = ids.slice(i, i + 200).map(id => records[id])
+      const sent = Object.fromEntries(batch.map(r => [r.id, r.updated_at]))
+      const { error } = await supabase.from('records').upsert(batch.map(r => ({ id: r.id, kind: r.kind, job_id: r.job_id, data: r.data, deleted: r.deleted })))
+      if (error) { status.error = error.message; save(); emit(); return }
+      Object.keys(sent).forEach(id => { if (records[id]?.updated_at === sent[id]) delete pending[id] })
+      save()
+    }
+    status.error = ''
+    emit()
+  } finally { pushing = false }
+  if (Object.keys(pending).length) schedulePush()
 }
 
 function applyRemote(row) {
@@ -131,6 +140,7 @@ async function startSync() {
   try {
     await pull()
     await push()
+    uploadPendingFiles() // photos and documents can take a while, so the app carries on meanwhile
     if (!channel) {
       channel = supabase.channel('records-live')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'records' }, payload => {
@@ -196,12 +206,44 @@ async function idbDo(mode, fn) {
   })
 }
 
+// Files waiting to go up to the cloud (saved offline, signed out, or from before sync was switched on)
+const LS_FILES = 'pw_files_pending', LS_FILES_SEEDED = 'pw_files_seeded'
+let filesPending = load(LS_FILES, {})
+const saveFilesPending = () => localStorage.setItem(LS_FILES, JSON.stringify(filesPending))
+async function uploadOne(path, blob) {
+  const { error } = await supabase.storage.from('docs').upload(path, blob, { upsert: true, contentType: blob.type || 'application/octet-stream' })
+  if (error) throw error
+}
+let uploadingFiles = false
+async function uploadPendingFiles() {
+  if (!cloudEnabled || !status.signedIn || !navigator.onLine || uploadingFiles) return
+  uploadingFiles = true
+  try {
+    // First time this phone signs in: everything already on it needs to go up so the other phone can see it
+    if (!localStorage.getItem(LS_FILES_SEEDED)) {
+      const keys = await idbDo('readonly', st => st.getAllKeys())
+      ;(keys || []).forEach(k => { filesPending[k] = true })
+      saveFilesPending(); localStorage.setItem(LS_FILES_SEEDED, '1')
+    }
+    for (const path of Object.keys(filesPending)) {
+      if (!status.signedIn || !navigator.onLine) break
+      try {
+        const blob = await idbDo('readonly', st => st.get(path))
+        if (blob) await uploadOne(path, blob)
+        delete filesPending[path]; saveFilesPending()
+      } catch (e) { console.warn('Upload failed, will try again', path, e) }
+    }
+  } catch (e) { console.warn(e) } finally { uploadingFiles = false }
+}
+
+// Saves on this phone straight away, then uploads (now if it can, otherwise later). Returns true if it's in the cloud already.
 export async function saveFile(path, blob) {
   await idbDo('readwrite', st => st.put(blob, path)) // keep a local copy for offline viewing
-  if (cloudEnabled && status.signedIn) {
-    const { error } = await supabase.storage.from('docs').upload(path, blob, { upsert: true, contentType: blob.type || 'application/octet-stream' })
-    if (error) throw error
-  }
+  if (!cloudEnabled) return false
+  filesPending[path] = true; saveFilesPending()
+  if (!status.signedIn || !navigator.onLine) return false
+  try { await uploadOne(path, blob); delete filesPending[path]; saveFilesPending(); return true }
+  catch (e) { console.warn('Upload failed, will try again', e); return false }
 }
 export async function getFile(path) {
   const local = await idbDo('readonly', st => st.get(path))
@@ -216,6 +258,7 @@ export async function getFile(path) {
 }
 export async function deleteFile(path) {
   await idbDo('readwrite', st => st.delete(path)).catch(() => {})
+  if (filesPending[path]) { delete filesPending[path]; saveFilesPending() }
   if (cloudEnabled && status.signedIn) await supabase.storage.from('docs').remove([path])
 }
 
