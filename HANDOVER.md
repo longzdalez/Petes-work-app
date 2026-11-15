@@ -1,6 +1,6 @@
 # BP Builders app: handover
 
-This is the full handover for whoever picks up this app next. It covers what the app is, who uses it, how it's built and published, how the data is stored, and what's still to do. Last updated 12 Nov 2026.
+This is the full handover for whoever picks up this app next. It covers what the app is, who uses it, how it's built and published, how the data is stored, and what's still to do. Last updated 15 Nov 2026.
 
 - **Live app:** https://longzdalez.github.io/petes-work-app/
 - **Repo:** github.com/longzdalez/Petes-work-app (`main` holds the source, `gh-pages` holds the built site)
@@ -33,7 +33,7 @@ The original working name was "Pete Work". You'll still see it in some internal 
 
 - **React 19 + Vite 8**, plain JavaScript (no TypeScript) and one CSS file, `src/styles.css`.
 - **Hash routing** in `src/router.js`, using `nav(path)` and `back(fallback)`.
-- **Hosting:** GitHub Pages from the `gh-pages` branch. There is no Actions build workflow; it was removed because Actions runs sat queued for a long time.
+- **Hosting:** GitHub Pages from the `gh-pages` branch. The GitHub Actions workflow `.github/workflows/deploy.yml` ("Publish app") builds the app and pushes it to `gh-pages` automatically (see Build and publish below).
 - **Libraries:**
   - jsPDF + jspdf-autotable for invoice, quote and snag PDFs
   - pdfjs-dist for PDF thumbnails and reading text from PDF receipts
@@ -49,7 +49,11 @@ npm run dev       # local dev server
 npx vite build    # outputs dist/ (base is './' so it works under /petes-work-app/)
 ```
 
-To publish (dist/ is git-ignored on main):
+**Publishing is automatic.** Every push to `main` that touches `src/`, `public/`, `index.html`, `package.json`, `package-lock.json`, `vite.config.js` or the workflow file runs `.github/workflows/deploy.yml` ("Publish app"). It runs `npm ci` and `npx vite build`, then force-pushes `dist/` (plus `.nojekyll`) to `gh-pages` with the commit message "Deploy <short sha>". GitHub Pages then goes live about 30 seconds later. You can also run it by hand from the Actions tab (workflow_dispatch). Changes to docs only (like this file) don't trigger a publish.
+
+So to publish: check that `npx vite build` passes locally, bump `CACHE` in `public/sw.js`, and push to `main`. To confirm it worked, check that the latest `gh-pages` commit says "Deploy <your sha>" (`git fetch origin gh-pages && git log -1 origin/gh-pages`), or run `gh run list -R longzdalez/Petes-work-app -L 1`. After publishing, tell the user to **close the app fully and reopen it** to get the new version.
+
+Manual fallback, only if Actions is broken (dist/ is git-ignored on main):
 
 ```bash
 npx vite build
@@ -57,8 +61,6 @@ rm -rf /tmp/ghp && cp -r dist /tmp/ghp && cd /tmp/ghp && touch .nojekyll
 git init -q -b gh-pages && git add -A && git commit -qm "Deploy <short sha>"
 git push -f https://github.com/longzdalez/petes-work-app gh-pages
 ```
-
-GitHub then runs "pages build and deployment" automatically, which takes about 30 seconds. You can check it with `gh run list -R longzdalez/Petes-work-app -L 1`. After publishing, tell the user to **close the app fully and reopen it** to get the new version.
 
 ### Testing
 There's no test suite. During development I used Playwright scripts (Chromium at a 384×832 mobile viewport with touch on), run against `npx vite preview --port 4173`. Each script:
@@ -76,6 +78,7 @@ Do the same after any change.
 - longzdalez owns the repo. The user's own GitHub account is a collaborator.
 - Pushes only work if the **Claude GitHub App is installed on the longzdalez account** ("All repositories"). On 12 Nov, pushes failed with HTTP 403 ("Claude doesn't have GitHub access… for your organization"). Installing the app on longzdalez fixed it.
 - A long-running session can keep stale credentials even after access is fixed. Starting a fresh session fixed this.
+- 15 Nov: `git push` from the session was refused ("not in this session's authorized repository set") and adding the repo to the session failed. The **GitHub connector** (MCP, signed in as longzdalez) still worked, so the update went out through it instead: create a branch, push the changed files with `push_files`, open a PR into `main` and squash-merge it. The merge triggers the publish workflow. Afterwards, compare the branch with your local build (`git fetch origin <branch>` and check the tree hashes match) to make sure every file arrived byte for byte.
 - GitHub reports the repo as moved from `petes-work-app` to `Petes-work-app`. Both URLs work.
 - A git bundle of the whole repo is also kept in the project files at `pete-work-app/app.bundle`.
 
