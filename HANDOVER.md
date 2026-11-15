@@ -39,7 +39,7 @@ The original working name was "Pete Work". You'll still see it in some internal 
   - pdfjs-dist for PDF thumbnails and reading text from PDF receipts
   - tesseract.js for receipt OCR, fully self-hosted in `public/ocr/`
   - @supabase/supabase-js for optional sync
-- **Service worker:** `public/sw.js`. It handles the offline cache, the Web Share Target (sharing files into the app from WhatsApp or email), `periodicsync` reminders and notification clicks. **Bump `CACHE` (currently `pete-work-v16`) every time you publish**, or phones keep the old version.
+- **Service worker:** `public/sw.js`. It handles the offline cache, the Web Share Target (sharing files into the app from WhatsApp or email), `periodicsync` reminders and notification clicks. **Bump `CACHE` (currently `pete-work-v17`) every time you publish**, or phones keep the old version.
 
 ### Build and publish
 
@@ -49,7 +49,7 @@ npm run dev       # local dev server
 npx vite build    # outputs dist/ (base is './' so it works under /petes-work-app/)
 ```
 
-**Publishing is automatic.** Every push to `main` that touches `src/`, `public/`, `index.html`, `package.json`, `package-lock.json`, `vite.config.js` or the workflow file runs `.github/workflows/deploy.yml` ("Publish app"). It runs `npm ci` and `npx vite build`, then force-pushes `dist/` (plus `.nojekyll`) to `gh-pages` with the commit message "Deploy <short sha>". GitHub Pages then goes live about 30 seconds later. You can also run it by hand from the Actions tab (workflow_dispatch). Changes to docs only (like this file) don't trigger a publish.
+**Publishing is automatic.** Every push to `main` that touches `src/`, `public/`, `index.html`, `package.json`, `package-lock.json`, `vite.config.js` or the workflow file runs `.github/workflows/deploy.yml` ("Publish app"). It runs `npm ci` and `npx vite build` (which also draws the app icons, see below), then force-pushes `dist/` (plus `.nojekyll`) to `gh-pages` with the commit message "Deploy <short sha>". GitHub Pages then goes live about 30 seconds later. You can also run it by hand from the Actions tab (workflow_dispatch). Changes to docs only (like this file) don't trigger a publish.
 
 So to publish: check that `npx vite build` passes locally, bump `CACHE` in `public/sw.js`, and push to `main`. To confirm it worked, check that the latest `gh-pages` commit says "Deploy <your sha>" (`git fetch origin gh-pages && git log -1 origin/gh-pages`), or run `gh run list -R longzdalez/Petes-work-app -L 1`. After publishing, tell the user to **close the app fully and reopen it** to get the new version.
 
@@ -78,7 +78,7 @@ Do the same after any change.
 - longzdalez owns the repo. The user's own GitHub account is a collaborator.
 - Pushes only work if the **Claude GitHub App is installed on the longzdalez account** ("All repositories"). On 12 Nov, pushes failed with HTTP 403 ("Claude doesn't have GitHub access… for your organization"). Installing the app on longzdalez fixed it.
 - A long-running session can keep stale credentials even after access is fixed. Starting a fresh session fixed this.
-- 15 Nov: `git push` from the session was refused ("not in this session's authorized repository set") and adding the repo to the session failed. The **GitHub connector** (MCP, signed in as longzdalez) still worked, so the update went out through it instead: create a branch, push the changed files with `push_files`, open a PR into `main` and squash-merge it. The merge triggers the publish workflow. Afterwards, compare the branch with your local build (`git fetch origin <branch>` and check the tree hashes match) to make sure every file arrived byte for byte.
+- 15 Nov: `git push` from the session was refused ("not in this session's authorized repository set") and adding the repo to the session failed. The **GitHub connector** (MCP, signed in as longzdalez) still worked, so the update went out through it instead: create a branch, push the changed files with `push_files`, open a PR into `main` and squash-merge it. The merge triggers the publish workflow. Afterwards, compare the branch with your local build (`git fetch origin <branch>` and check the tree hashes match) to make sure every file arrived byte for byte. The connector can only upload text files, which is why the icon PNGs are drawn during the build rather than stored in git. It also can't change `.github/workflows/` (GitHub refuses with "Resource not accessible by integration"), so build changes have to go in `vite.config.js` or `package.json`.
 - GitHub reports the repo as moved from `petes-work-app` to `Petes-work-app`. Both URLs work.
 - A git bundle of the whole repo is also kept in the project files at `pete-work-app/app.bundle`.
 
@@ -92,7 +92,7 @@ public/
   config.js                Supabase URL + anon key (EMPTY = sync off)
   manifest.webmanifest     PWA manifest, share_target
   sw.js                    service worker (cache name, share target, reminders)
-  icons/                   BP roof logo on green (192, 512, 512 maskable)
+  icons/                   app icons (PNG), NOT in git: drawn by src/build/make-icons.js on every build
   ocr/                     tesseract worker, wasm cores, eng.traineddata.gz (self-hosted, no CDN)
 supabase/setup.sql         run once in Supabase SQL editor (table, RLS, realtime, storage)
 src/
@@ -110,6 +110,7 @@ src/
   files.js                 storeFile, pickFile, openPath, download, share, WhatsApp helpers
   thumbs.js                image/PDF thumbnails, shrinkImage, pdfText, pdfCanvas
   pdf.js                   invoice/quote PDF, invoiceTotals
+  build/make-icons.js      draws the home-screen icons (BP Builders logo, same as Logo in ui.jsx) as PNGs with no extra libraries; vite.config.js runs it at the start of every build and dev server
   jobs.js                  job statuses, progress, templates
   pages/
     Home.jsx               logo header, backup nudge, Contacts/Renewals/Search, To-do, General cash flow, job list, job details sheet
@@ -171,7 +172,7 @@ Every saved item is a **record**: `{ id, kind, job_id, data, deleted, updated_at
 
 ## 6. Pending and next steps
 
-1. **Automatic online backup and sync (approved by the user on 12 Nov, waiting on them).**
+1. **Online sync between the two phones (approved 12 Nov, confirmed 15 Nov for Brian's phone; waiting on the user's Supabase details).**
    - The user chose "Yes, set up online backup", and I sent them steps to:
      - create a free Supabase project (region London)
      - run `supabase/setup.sql`
@@ -181,7 +182,11 @@ Every saved item is a **record**: `{ id, kind, job_id, data, deleted, updated_at
      - the user then opens Settings → "First time? Create the shared login" on the phone
      - after that, data syncs automatically, and the second phone signs in with the same login
    - The first account ever created is the only one the database lets in (RLS is set up for that in setup.sql).
-   - Sync code is already in `store.js` (`initCloud`, realtime). It has **not been tested against a real Supabase project yet**, so test it carefully. Also check that the user's existing local data uploads on first sign-in, because the pending queue covers records changed before sign-in.
+   - Sync code is in `store.js` (`initCloud`, realtime). On 15 Nov it was fixed and tested against a mocked Supabase (Playwright intercepting the REST, auth and storage calls), but **not yet against a real project**, so watch the first real sign-in:
+     - Every record written while sync was off is still in `pw_pending`, so the first sign-in uploads all of it, in batches of 200.
+     - Files (receipt photos, documents) have their own queue, `pw_files_pending`. On a phone's first sign-in, every file already in IndexedDB is added to it (flag `pw_files_seeded`). Files saved offline or signed out wait in the queue and go up on the next sync. `saveFile` no longer throws if the upload fails, and returns true only if the file is already in the cloud.
+     - Tested: 451 records and 2 files uploaded on the first sign-in with nothing left pending; an empty second phone pulled everything; a file saved offline uploaded when back online.
+   - The user chose this on 15 Nov so that Brian's phone shows the same jobs. Settings now has a "Put the app on another phone" card with the link and a Send button.
    - The user originally asked for "automatic backup to Google Drive every few seconds". That isn't possible from a PWA, and the Huawei has no Google services, so Supabase is the agreed route.
 2. **WhatsApp reminders.**
    - The user wanted a WhatsApp text 2 days before anything urgent. What exists now is phone notifications instead: `reminders.js`, switched on in Settings → Reminders. The background `periodicSync` only fires on Chrome-based browsers, and it isn't guaranteed.

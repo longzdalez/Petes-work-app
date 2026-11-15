@@ -1,5 +1,5 @@
 node_modules
 dist
 
-# Made from icons/*.svg by scripts/make-icons.sh (the publish workflow runs it)
+# Drawn by src/build/make-icons.js at the start of every build (see vite.config.js)
 public/icons/*.png
