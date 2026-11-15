@@ -1,2 +1,5 @@
 node_modules
 dist
+
+# Drawn by src/build/make-icons.js at the start of every build (see vite.config.js)
+public/icons/*.png

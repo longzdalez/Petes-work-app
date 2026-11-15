@@ -8,7 +8,7 @@ export async function storeFile(file0, folder) {
   const path = `${folder}/${uid()}-${safe}`
   const thumb = await makeThumb(file)
   let cloud = false
-  try { await saveFile(path, file); cloud = cloudEnabled && status.signedIn } catch (e) { console.warn(e) }
+  try { cloud = await saveFile(path, file) } catch (e) { console.warn(e) }
   return { path, thumb, type: file.type, size: file.size, name: file0.name, cloud }
 }
 

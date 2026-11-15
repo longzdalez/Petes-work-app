@@ -15,7 +15,7 @@ export async function addDocs(jobId, files) {
     const path = `${jobId}/${id}-${safe}`
     const thumb = await makeThumb(f)
     let cloud = false
-    try { await saveFile(path, f); cloud = cloudEnabled && status.signedIn } catch (e) { console.warn(e) }
+    try { cloud = await saveFile(path, f) } catch (e) { console.warn(e) }
     put('doc', { name: f0.name, type: f.type, size: f.size, path, thumb, cloud }, { id, job_id: jobId })
   }
 }
@@ -59,7 +59,7 @@ export default function Docs({ id }) {
   useEffect(() => {
     if (!cloudEnabled || !st.signedIn || !st.online) return
     docs.filter(d => !d.data.cloud).forEach(async d => {
-      try { const b = await getFile(d.data.path); if (b) { await saveFile(d.data.path, b); update(d.id, { cloud: true }) } } catch { }
+      try { const b = await getFile(d.data.path); if (b && await saveFile(d.data.path, b)) update(d.id, { cloud: true }) } catch { }
     })
   }, [st.signedIn, st.online, docs.length])
 
