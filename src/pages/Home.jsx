@@ -15,6 +15,7 @@ import { daysUntil } from './Contacts'
 import { TodoList } from '../Todos'
 import { ScopeAndValue } from './Job'
 import { GeneralCashFlow } from './CashFlow'
+import { MoneyCentreCard } from './MoneyCentre'
 import { VehicleSheet, CarIcon } from '../Vehicle'
 
 export function JobDetailsSheet({ job, onClose }) {
@@ -243,6 +244,7 @@ export default function Home() {
         </div>
         <BackupReminder />
         <TodayCard />
+        <MoneyCentreCard />
         <div id="home-todo" className="anchor"><TodoList title="To-do" /></div>
         <GeneralCashFlow />
         <div className="home-tools">
