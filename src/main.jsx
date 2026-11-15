@@ -19,6 +19,8 @@ import Hours from './pages/Hours'
 import Contacts, { Renewals } from './pages/Contacts'
 import Search from './pages/Search'
 import CashFlowPage from './pages/CashFlow'
+import MoneyCentre from './pages/MoneyCentre'
+import Help from './pages/Help'
 import Share from './pages/Share'
 import VoiceButton from './Voice'
 import { Logo } from './ui'
@@ -60,6 +62,8 @@ function App() {
   else if (r[0] === 'renewals') page = <Renewals />
   else if (r[0] === 'search') page = <Search />
   else if (r[0] === 'cashflow') page = <CashFlowPage />
+  else if (r[0] === 'money') page = <MoneyCentre />
+  else if (r[0] === 'help') page = <Help />
   else if (r[0] === 'finished') page = <FinishedJobs />
   else page = <Home />
   return <>
