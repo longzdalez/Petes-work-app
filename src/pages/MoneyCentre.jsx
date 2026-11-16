@@ -15,7 +15,7 @@ import { occurrences } from './CashFlow'
 import { isOverdue } from './Invoices'
 import { accountantCsv } from './Money'
 import { whatsApp, shareText, shareOrDownload } from '../files'
-import { allItems, tally, settle, againstOf, lockedUntil, isLocked, lockMsg, findDuplicate, taxYear } from '../ledger'
+import { allItems, tally, settle, againstOf, lockedUntil, isLocked, lockMsg, findDuplicate, taxYear, OPENING_ROWS, openingOf } from '../ledger'
 
 const KIND = { income: 'Money in', expense: 'Money out', drawing: 'Paid themselves', transfer: 'Between you' }
 const CAT = { materials: 'Materials', contractor: 'Subcontractor', wages: 'Wages', vehicle: 'Car', repeat: 'Repeat payment', other: 'Other', client: 'Client payment', transfer: 'Settle up' }
@@ -110,11 +110,12 @@ function AddSheet({ start, onClose, owners }) {
 
 function ItemRow({ it }) {
   const locked = isLocked(it.date)
-  const editable = it.kind === 'income' || it.kind === 'expense'
+  const editable = (it.kind === 'income' || it.kind === 'expense') && it.src !== 'opening'
   const setPayer = p => locked ? alert(lockMsg(it.date)) : update(it.id, { payer: p })
   const sign = it.kind === 'income' ? '+' : it.kind === 'transfer' ? '' : '−'
   const open = () => {
-    if (it.job) nav(`/job/${it.job}/money`)
+    if (it.src === 'opening') alert('This is part of the starting point. Change it on the Tally tab, under Starting point.')
+    else if (it.job) nav(`/job/${it.job}/money`)
     else if (it.src === 'genpay') nav('/cashflow')
     else if (locked) alert(lockMsg(it.date))
     else if (it.src === 'money' && confirmDelete('this payment')) remove(it.id)
@@ -271,6 +272,8 @@ function TallyTab({ items, t, owners, settings, setAdd, setFilter, setTab }) {
       {t.unmarked > 0 && <p className="notice small" style={{ marginTop: 10 }}>{t.unmarked} payment{t.unmarked > 1 ? 's aren\'t' : ' isn\'t'} marked B or P yet, so this isn't final. <button className="link-btn" onClick={() => { setFilter('none'); setTab('pay') }}>Mark {t.unmarked > 1 ? 'them' : 'it'}</button></p>}
     </section>
 
+    <StartingPoint owners={owners} />
+
     <div className="mc-people">{t.people.map(p => <PersonCard key={p.name} p={p} rel={(p.balance - (t.people.reduce((s, q) => s + q.balance, 0) - p.balance)) / 2} />)}</div>
     <p className="small muted" style={{ margin: '-4px 4px 14px' }}>Profits are split 50/50. There's no business account: these totals add up what's gone in and out of both your accounts.</p>
 
@@ -297,13 +300,79 @@ function TallyTab({ items, t, owners, settings, setAdd, setFilter, setTab }) {
   </>
 }
 
+// ---------- Starting point ----------
+
+// Lump sums for everything before you started using the app, so the tally starts from where you really are
+function StartingPoint({ owners }) {
+  const [open, setOpen] = useState(false)
+  const o = openingOf()
+  const sum = k => owners.reduce((s, n) => s + num(o?.[k]?.[n]), 0)
+  const out = sum('materials') + sum('wages') + sum('other')
+  return (
+    <section className="card mc-start">
+      <div className="card-head"><h2>Starting point</h2><button className="btn ghost small" onClick={() => setOpen(true)}><Icon name={o ? 'edit' : 'plus'} size={16} /> {o ? 'Change' : 'Set it'}</button></div>
+      {!o ? <p className="small muted" style={{ margin: 0 }}>Put in the totals from before you started using the app (for example the last 6 months): money in, materials, wages and other costs for each of you, and anything already owed between you. Everything here then starts from those numbers.</p> : <>
+        <p className="small muted" style={{ marginTop: 0 }}>Totals up to {niceDate(o.date)}, added in with everything since.</p>
+        <div className="mc-mini">
+          <div><span>In</span><b className="pos">{money(sum('in'))}</b></div>
+          <div><span>Out</span><b className="neg">{money(out)}</b></div>
+          <div><span>Owed</span><b>{num(o.owed?.amount) > 0 ? money(num(o.owed.amount)) : '–'}</b></div>
+        </div>
+        {num(o.owed?.amount) > 0 && <p className="small" style={{ margin: 0 }}>{o.owed.by} already owed {o.owed.to} {money(num(o.owed.amount))}.</p>}
+      </>}
+      {open && <StartingPointSheet owners={owners} onClose={() => setOpen(false)} />}
+    </section>
+  )
+}
+
+function StartingPointSheet({ owners, onClose }) {
+  const o = openingOf() || {}
+  const [d, setD] = useState(() => {
+    const v = { date: o.date || today(), owed: { by: o.owed?.by || '', to: o.owed?.to || '', amount: o.owed?.amount ? String(o.owed.amount) : '' } }
+    OPENING_ROWS.forEach(r => { v[r.k] = Object.fromEntries(owners.map(n => [n, o[r.k]?.[n] ? String(o[r.k][n]) : ''])) })
+    return v
+  })
+  const setCell = (k, n, val) => setD(x => ({ ...x, [k]: { ...x[k], [n]: val } }))
+  const setOwed = p => setD(x => ({ ...x, owed: { ...x.owed, ...p } }))
+  const other = n => owners.find(x => x !== n) || ''
+  const save = () => {
+    if (num(d.owed.amount) > 0 && !d.owed.by) return alert('Tap who owed the money')
+    const v = { date: d.date || today(), owed: num(d.owed.amount) > 0 ? { by: d.owed.by, to: d.owed.to, amount: num(d.owed.amount) } : null }
+    OPENING_ROWS.forEach(r => { v[r.k] = Object.fromEntries(owners.map(n => [n, num(d[r.k][n])])) })
+    setS({ opening: v }); onClose()
+  }
+  const clear = () => { if (confirm('Remove the starting point? The tally will then only count payments in the app.')) { setS({ opening: null }); onClose() } }
+  return (
+    <Sheet open onClose={onClose} title="Starting point">
+      <p className="small muted" style={{ marginTop: 0 }}>The totals from before you started using the app. Leave a box empty if it's nothing.</p>
+      <label className="field"><span>Totals up to</span><input type="date" value={d.date} onChange={e => setD(x => ({ ...x, date: e.target.value }))} /></label>
+      <div className="start-grid">
+        <span />{owners.map(n => <b key={n}>{n}</b>)}
+        {OPENING_ROWS.flatMap(r => [
+          <span key={r.k} className="start-label">{r.l}<small>{r.hint}</small></span>,
+          ...owners.map(n => <span key={r.k + n} className="veh-amt"><span>£</span><input inputMode="decimal" placeholder="0.00" aria-label={`${r.l}, ${n}`} value={d[r.k][n]} onChange={e => setCell(r.k, n, e.target.value)} /></span>),
+        ])}
+      </div>
+      <h3 className="sub-h">Already owed between you</h3>
+      <p className="small muted" style={{ marginTop: 0 }}>Only if there's money owed that isn't covered by the boxes above.</p>
+      <label className="field"><span>Who owed it?</span><PayerToggle big value={d.owed.by} onChange={p => setOwed({ by: p, to: other(p) })} /></label>
+      <label className="field"><span>{d.owed.by ? `${d.owed.by} owed ${d.owed.to} (£)` : 'How much (£)'}</span><input inputMode="decimal" placeholder="0.00" value={d.owed.amount} onChange={e => setOwed({ amount: e.target.value })} /></label>
+      <div className="sheet-actions">
+        {openingOf() && <button className="btn danger" onClick={clear}><Icon name="trash" size={18} /></button>}
+        <button className="btn primary" onClick={save}>Save</button>
+      </div>
+    </Sheet>
+  )
+}
+
 // ---------- Money in tab ----------
 
 // One payment in: who paid it, whose account it went into, and who it's set against
 function MoneyInRow({ it, owners }) {
   const locked = isLocked(it.date)
   const set = patch => locked ? alert(lockMsg(it.date)) : update(it.id, patch)
-  const open = () => { if (it.job) nav(`/job/${it.job}/money`); else if (it.src === 'genpay') nav('/cashflow') }
+  const opening = it.src === 'opening'
+  const open = () => { if (opening) alert('This is part of the starting point. Change it on the Tally tab, under Starting point.'); else if (it.job) nav(`/job/${it.job}/money`); else if (it.src === 'genpay') nav('/cashflow') }
   const into = owners.includes(it.payer) ? it.payer : ''
   const against = againstOf(it, owners)
   return (
@@ -311,12 +380,12 @@ function MoneyInRow({ it, owners }) {
       <div className="mc-in-top">
         <span className="small muted nowrap">{shortDate(it.date)}</span>
         <span className="text tap" onClick={open}><b>{it.desc || 'Money in'}</b><br />
-          <span className="small muted">{it.from ? `From ${it.from}` : it.src === 'genpay' ? 'Repeat payment' : 'Who paid it: not filled in'}{it.jobName ? ` · ${it.jobName}` : ''}</span></span>
+          <span className="small muted">{it.from ? `From ${it.from}` : it.src === 'genpay' ? 'Repeat payment' : opening ? 'Lump sum from before the app' : 'Who paid it: not filled in'}{it.jobName ? ` · ${it.jobName}` : ''}</span></span>
         <span className="nowrap pos">+{money(it.amount)}</span>
       </div>
       <div className="mc-in-who">
-        <span>Into</span><PayerToggle disabled={locked} value={into} onChange={p => set({ payer: p })} />
-        <span>Set against</span><PayerToggle disabled={locked} value={against} onChange={p => set({ against: p })} />
+        <span>Into</span><PayerToggle disabled={locked || opening} value={into} onChange={p => set({ payer: p })} />
+        <span>Set against</span><PayerToggle disabled={locked || opening} value={against} onChange={p => set({ against: p })} />
       </div>
       {into && against && into !== against && <p className="small mc-in-note">Went into {into}'s account, but counts for {against}.</p>}
     </div>
