@@ -11,7 +11,7 @@ import { nav } from '../router'
 import { PayerToggle } from '../Vehicle'
 import { isLocked, lockMsg, findDuplicate, payerOf, allItems, tally } from '../ledger'
 
-const payerLabel = p => p === 'business' ? 'Business account' : p || ''
+const payerLabel = p => p === 'business' ? '' : p || ''
 export const cisDeduction = d => d.cat === 'contractor' && num(d.cisRate) ? Math.round(num(d.cisLabour || d.amount) * num(d.cisRate)) / 100 : 0
 
 // Every payment across all jobs, as a spreadsheet file for the accountant (UK tax year by default)
@@ -19,15 +19,15 @@ export function accountantCsv(from, to) {
   const jobs = Object.fromEntries(list('job').map(j => [j.id, j.data.name]))
   const rows = list('money', r => r.data.status !== 'upcoming' && r.data.cat !== 'transfer' && r.data.date >= from && r.data.date <= to).sort((a, b) => a.data.date.localeCompare(b.data.date))
   const esc = v => { const t = String(v ?? ''); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t }
-  const head = ['Date', 'Job', 'In/Out', 'Category', 'Paid to/from', 'Description', 'Amount', 'VAT included', 'CIS rate %', 'CIS deducted', 'Receipt photo', 'Paid by / into']
-  const body = rows.map(r => { const d = r.data; return [d.date, jobs[r.job_id] || '', d.dir === 'in' ? 'In' : 'Out', catLabel(d.dir, d.cat), d.person || '', d.desc || '', num(d.amount).toFixed(2), num(d.vat).toFixed(2), d.cat === 'contractor' ? num(d.cisRate) : '', cisDeduction(d).toFixed(2), d.receipt ? 'Yes' : '', payerLabel(payerOf(d))] })
+  const head = ['Date', 'Job', 'In/Out', 'Category', 'Paid to/from', 'Description', 'Amount', 'VAT included', 'CIS rate %', 'CIS deducted', 'Receipt photo', 'Paid by / into', 'Set against']
+  const body = rows.map(r => { const d = r.data; return [d.date, jobs[r.job_id] || '', d.dir === 'in' ? 'In' : 'Out', catLabel(d.dir, d.cat), d.person || '', d.desc || '', num(d.amount).toFixed(2), num(d.vat).toFixed(2), d.cat === 'contractor' ? num(d.cisRate) : '', cisDeduction(d).toFixed(2), d.receipt ? 'Yes' : '', payerLabel(payerOf(d)), d.dir === 'in' ? payerLabel(d.against || payerOf(d)) : ''] })
   const totIn = rows.filter(r => r.data.dir === 'in').reduce((s, r) => s + num(r.data.amount), 0)
   const totOut = rows.filter(r => r.data.dir === 'out').reduce((s, r) => s + num(r.data.amount), 0)
   body.push([], ['', '', '', '', '', 'Total in', totIn.toFixed(2)], ['', '', '', '', '', 'Total out', totOut.toFixed(2)], ['', '', '', '', '', 'Profit', (totIn - totOut).toFixed(2)])
   const owners = list('settings')[0]?.data?.owners?.filter(Boolean)
   const own = owners?.length ? owners : ['Pete', 'Brian']
   const t = tally(allItems(own).filter(it => it.date >= from && it.date <= to), own)
-  body.push([], ['Partner summary'], ['Partner', 'Paid out of own pocket', 'Money paid into own account', 'Paid to themselves', 'Share of profit'])
+  body.push([], ['Partner summary'], ['Partner', 'Paid out of own pocket', 'Money in set against them', 'Paid to themselves', 'Share of profit'])
   t.people.forEach(p => body.push([p.name, p.putIn.toFixed(2), p.received.toFixed(2), p.drew.toFixed(2), p.share.toFixed(2)]))
   const csv = [head, ...body].map(r => r.map(esc).join(',')).join('\r\n')
   return { file: new File([csv], `BP Builders accounts ${from} to ${to}.csv`, { type: 'text/csv' }), count: rows.length }
@@ -40,6 +40,7 @@ const byDate = (a, b) => (a.data.date || '').localeCompare(b.data.date || '') ||
 
 function EntrySheet({ entry, jobId, onClose, owners }) {
   const isNew = !entry.id
+  const job = useRecord(jobId)
   const [d, setD] = useState({ dir: 'in', cat: 'client', date: today(), status: 'paid', amount: '', desc: '', person: '', ...entry.data })
   const set = p => setD(x => ({ ...x, ...p }))
   const [busy, setBusy] = useState(false)
@@ -47,10 +48,11 @@ function EntrySheet({ entry, jobId, onClose, owners }) {
   const cats = d.dir === 'in' ? CATS_IN : CATS_OUT
   const save = () => {
     if (!num(d.amount)) return alert('Please put in an amount')
-    if (!d.payer) return alert(d.dir === 'in' ? 'Tap B, P or Biz to say whose account the money went into' : 'Tap B, P or Biz to say who paid')
+    if (!d.payer || d.payer === 'business') return alert(d.dir === 'in' ? 'Tap B or P to say whose account the money went into' : 'Tap B or P to say who paid')
     if (isLocked(d.date) || (!isNew && isLocked(entry.data.date))) return alert(lockMsg(d.date))
     if (isNew) { const dup = findDuplicate({ amount: d.amount, desc: d.desc, date: d.date }); if (dup && !confirm(`This looks like a payment already saved: ${dup.data.desc || 'no description'}, ${money(dup.data.amount)} on ${shortDate(dup.data.date)}. Save it anyway?`)) return }
     const data = { ...d, amount: num(d.amount) }
+    if (d.dir === 'in') data.against = d.against && d.against !== 'business' ? d.against : d.payer
     if (isNew) put('money', data, { job_id: jobId }); else update(entry.id, data)
     onClose()
   }
@@ -79,8 +81,11 @@ function EntrySheet({ entry, jobId, onClose, owners }) {
       {d.cat === 'contractor' && <label className="field"><span>Subcontractor</span>
         {entry.trades?.length > 0 && <div className="chips" style={{ marginBottom: 8 }}>{entry.trades.map(t => <button key={t} className={'chip' + (d.person === t ? ' on' : '')} onClick={() => set({ person: t })}>{t}</button>)}</div>}
         <input value={d.person} onChange={e => set({ person: e.target.value })} placeholder="Name" /></label>}
-      <label className="field"><span>{d.dir === 'in' ? 'Paid into whose account?' : d.cat === 'wages' ? 'Paid from whose account?' : 'Who paid?'}</span><PayerToggle big biz value={d.payer || ''} onChange={p => set({ payer: p })} /></label>
-      <p className="small muted" style={{ marginTop: -6 }}>Biz means the business account. This feeds the Money centre tally.</p>
+      {d.dir === 'in' && <label className="field"><span>Who paid it?</span><input value={d.person} list="payer-sugg" onChange={e => set({ person: e.target.value })} placeholder={(job?.data?.client) || 'e.g. the client'} /></label>}
+      {d.dir === 'in' && <Suggest id="payer-sugg" values={[job?.data?.client, ...list('money', m => m.data.dir === 'in').map(m => m.data.person)]} />}
+      <label className="field"><span>{d.dir === 'in' ? 'Paid into whose account?' : d.cat === 'wages' ? 'Paid from whose account?' : 'Who paid?'}</span><PayerToggle big value={d.payer === 'business' ? '' : d.payer || ''} onChange={p => set({ payer: p })} /></label>
+      {d.dir === 'in' && <><label className="field"><span>Set against</span><PayerToggle big value={d.against && d.against !== 'business' ? d.against : d.payer === 'business' ? '' : d.payer || ''} onChange={p => set({ against: p })} /></label>
+        <p className="small muted" style={{ marginTop: -6 }}>Who this money counts for in the Money centre's who owes who. It starts as whoever's account it went into.</p></>}
       <label className="field"><span>What was it for?</span><input value={d.desc} list="money-sugg" onChange={e => set({ desc: e.target.value })} placeholder={d.dir === 'in' ? 'e.g. Deposit' : 'e.g. Timber from Jewson'} /></label>
       <Suggest id="money-sugg" values={list('money').map(m => m.data.desc)} />
       {d.dir === 'out' && <>
@@ -324,7 +329,7 @@ export default function Money({ id }) {
               return (
                 <tr key={e.id} onClick={() => setEdit(e)}>
                   <td className="nowrap">{shortDate(e.data.date)}</td>
-                  <td><div>{e.data.desc || catLabel(e.data.dir, e.data.cat)}{e.data.receipt && <Icon name="receipt" size={13} style={{ marginLeft: 4, color: '#3b9268' }} />}</div><div className="muted small">{catLabel(e.data.dir, e.data.cat)}{e.data.person ? ` · ${e.data.person}` : ''}{e.data.payer ? ` · ${e.data.dir === 'in' ? 'into' : 'paid by'} ${e.data.payer === 'business' ? 'business account' : e.data.payer}` : ''}</div></td>
+                  <td><div>{e.data.desc || catLabel(e.data.dir, e.data.cat)}{e.data.receipt && <Icon name="receipt" size={13} style={{ marginLeft: 4, color: '#3b9268' }} />}</div><div className="muted small">{catLabel(e.data.dir, e.data.cat)}{e.data.person ? ` · ${e.data.person}` : ''}{e.data.payer && e.data.payer !== 'business' ? ` · ${e.data.dir === 'in' ? 'into' : 'paid by'} ${e.data.payer}` : ''}{e.data.dir === 'in' && e.data.against && e.data.against !== e.data.payer ? ` · set against ${e.data.against}` : ''}</div></td>
                   <td className={'r nowrap ' + (e.data.dir === 'in' ? 'pos' : 'neg')}>{e.data.dir === 'in' ? '+' : '−'}{money(e.data.amount)}</td>
                   <td className="r nowrap">{money(running)}</td>
                 </tr>
