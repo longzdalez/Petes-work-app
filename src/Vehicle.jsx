@@ -13,22 +13,23 @@ export function usePayers() {
     .sort((a, b) => a.letter.localeCompare(b.letter))
 }
 
+// Old payments could be marked 'business'. There's no business account, so they now count as not marked.
 export const BIZ = 'business'
-// Small buttons, e.g. B and P (plus "Biz" for the business account when biz is set). Tap one to pick; tap it again to clear.
-export function PayerToggle({ value, onChange, big, biz, disabled }) {
+// Two small buttons, B and P. Tap one to pick; tap it again to clear.
+export function PayerToggle({ value, onChange, big, disabled }) {
   const payers = usePayers()
-  const opts = [...payers.map(p => ({ v: p.name, l: p.letter, t: p.name })), ...(biz ? [{ v: BIZ, l: 'Biz', t: 'Business account' }] : [])]
+  const opts = payers.map(p => ({ v: p.name, l: p.letter, t: p.name }))
   return (
     <span className={'payer-toggle' + (big ? ' big' : '') + (disabled ? ' locked' : '')} onClick={e => e.stopPropagation()}>
       {opts.map(o => (
-        <button key={o.v} type="button" disabled={disabled} className={(value === o.v ? 'on' : '') + (o.v === BIZ ? ' biz' : '')} aria-pressed={value === o.v}
+        <button key={o.v} type="button" disabled={disabled} className={value === o.v ? 'on' : ''} aria-pressed={value === o.v}
           aria-label={o.t} title={o.t} onClick={() => onChange(value === o.v ? '' : o.v)}>{o.l}</button>
       ))}
     </span>
   )
 }
 
-// Asks who paid / whose account money went into. onPick(name | 'business'); onSkip optional (e.g. "Don't add to money")
+// Asks who paid / whose account money went into. onPick(name); onSkip optional (e.g. "Don't add to money")
 export function WhoPaidSheet({ title, text, into, onPick, onSkip, onClose }) {
   const payers = usePayers()
   return (
@@ -36,7 +37,6 @@ export function WhoPaidSheet({ title, text, into, onPick, onSkip, onClose }) {
       {text && <p className="small muted" style={{ marginTop: 0 }}>{text}</p>}
       <div className="who-grid">
         {payers.map(p => <button key={p.name} className="btn primary big" onClick={() => onPick(p.name)}><b>{p.letter}</b> {into ? `Into ${p.name}'s account` : `${p.name} paid`}</button>)}
-        <button className="btn ghost big" onClick={() => onPick(BIZ)}>{into ? 'Into the business account' : 'Business account paid'}</button>
         {onSkip && <button className="btn ghost" onClick={onSkip}>Don't add it to money</button>}
       </div>
     </Sheet>
@@ -56,7 +56,7 @@ const LAST = 'pw_vehicle_payer'
 export function VehicleSheet({ open, onClose }) {
   const payers = usePayers()
   const rows = useList('money', r => !r.job_id && r.data.cat === 'vehicle', (a, b) => (b.data.date || '').localeCompare(a.data.date || '') || b.data.created.localeCompare(a.data.created))
-  const last = (() => { try { return localStorage.getItem(LAST) || '' } catch { return '' } })()
+  const last = (() => { try { const v = localStorage.getItem(LAST) || ''; return v === BIZ ? '' : v } catch { return '' } })()
   const blank = () => Object.fromEntries(VEHICLE.map(v => [v.k, { amount: '', payer: last }]))
   const [form, setForm] = useState(blank)
   const [date, setDate] = useState(today())
@@ -67,10 +67,10 @@ export function VehicleSheet({ open, onClose }) {
   const save = () => {
     if (!filled.length) return alert('Put an amount in at least one box')
     const missing = filled.find(v => !form[v.k].payer)
-    if (missing) return alert(`Tap ${payers.map(p => p.letter).join(', ')} or Biz to say who paid for ${label(missing.k)}`)
+    if (missing) return alert(`Tap ${payers.map(p => p.letter).join(' or ')} to say who paid for ${label(missing.k)}`)
     if (isLocked(date)) return alert(lockMsg(date))
     for (const v of filled) { const dup = findDuplicate({ amount: num(form[v.k].amount), desc: label(v.k), date }); if (dup && !confirm(`${label(v.k)} ${money(num(form[v.k].amount))} looks like one already saved on ${shortDate(dup.data.date)}. Save it anyway?`)) return }
-    filled.forEach(v => put('money', { dir: 'out', cat: 'vehicle', vtype: v.k, desc: label(v.k), amount: num(form[v.k].amount), person: form[v.k].payer === 'business' ? '' : form[v.k].payer, payer: form[v.k].payer, date, status: 'paid' }, { job_id: null }))
+    filled.forEach(v => put('money', { dir: 'out', cat: 'vehicle', vtype: v.k, desc: label(v.k), amount: num(form[v.k].amount), person: form[v.k].payer, payer: form[v.k].payer, date, status: 'paid' }, { job_id: null }))
     try { localStorage.setItem(LAST, form[filled[filled.length - 1].k].payer) } catch { }
     setMsg(`Saved ${filled.length} payment${filled.length > 1 ? 's' : ''}.`)
     setForm(blank())
@@ -86,11 +86,11 @@ export function VehicleSheet({ open, onClose }) {
           <div key={v.k} className="veh-row">
             <span className="veh-name">{v.l}</span>
             <span className="veh-amt"><span>£</span><input inputMode="decimal" placeholder="0.00" aria-label={`${v.l} amount`} value={form[v.k].amount} onChange={e => { setMsg(''); setRow(v.k, { amount: e.target.value }) }} /></span>
-            <PayerToggle big biz value={form[v.k].payer} onChange={p => setRow(v.k, { payer: p })} />
+            <PayerToggle big value={form[v.k].payer} onChange={p => setRow(v.k, { payer: p })} />
           </div>
         ))}
       </div>
-      <p className="small muted" style={{ margin: '4px 0 10px' }}>Fill in what you paid, and tap {payers.map(p => `${p.letter} for ${p.name}`).join(', ')} or Biz for the business account.</p>
+      <p className="small muted" style={{ margin: '4px 0 10px' }}>Fill in what you paid, and tap {payers.map(p => `${p.letter} for ${p.name}`).join(' or ')}.</p>
       <button className="btn primary wide big" onClick={save}><Icon name="check" size={18} /> Save</button>
       {msg && <p className="notice small" style={{ marginTop: 10 }}>{msg}</p>}
 
@@ -101,7 +101,7 @@ export function VehicleSheet({ open, onClose }) {
           <div key={r.id} className="up-row">
             <span className="small muted nowrap">{shortDate(r.data.date)}</span>
             <span className="text">{r.data.desc}</span>
-            <span className="payer-chip">{r.data.payer === 'business' ? '£' : (r.data.payer || r.data.person || '?')[0].toUpperCase()}</span>
+            <span className="payer-chip">{r.data.payer === 'business' ? '?' : (r.data.payer || r.data.person || '?')[0].toUpperCase()}</span>
             <span className="nowrap neg">−{money(r.data.amount)}</span>
             <button className="icon-btn small" aria-label={`Delete ${r.data.desc}`} onClick={() => { if (isLocked(r.data.date)) return alert(lockMsg(r.data.date)); if (confirmDelete('this payment')) remove(r.id) }}><Icon name="trash" size={16} /></button>
           </div>
