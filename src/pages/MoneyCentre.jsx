@@ -1,5 +1,6 @@
-// Money centre: every payment in and out across all jobs, car costs and repeat payments, marked B, P or Biz,
+// Money centre: every payment in and out across all jobs, car costs and repeat payments, marked B or P,
 // with the running tally of who has put in what, who has had what, and who owes who.
+// There's no business account: all the money is in Brian's or Pete's account, and this adds them together.
 import { useState } from 'react'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -14,7 +15,7 @@ import { occurrences } from './CashFlow'
 import { isOverdue } from './Invoices'
 import { accountantCsv } from './Money'
 import { whatsApp, shareText, shareOrDownload } from '../files'
-import { allItems, tally, settle, lockedUntil, isLocked, lockMsg, findDuplicate, taxYear } from '../ledger'
+import { allItems, tally, settle, againstOf, lockedUntil, isLocked, lockMsg, findDuplicate, taxYear } from '../ledger'
 
 const KIND = { income: 'Money in', expense: 'Money out', drawing: 'Paid themselves', transfer: 'Between you' }
 const CAT = { materials: 'Materials', contractor: 'Subcontractor', wages: 'Wages', vehicle: 'Car', repeat: 'Repeat payment', other: 'Other', client: 'Client payment', transfer: 'Settle up' }
@@ -26,7 +27,7 @@ const RECEIPT_OVER = 50
 const needsReceipt = it => it.src === 'money' && it.kind === 'expense' && it.amount > RECEIPT_OVER && !it.receipt && !['ulez', 'congestion'].includes(it.vtype)
 const sm = v => (v < -0.004 ? '−' : '') + money(Math.abs(v))
 const neg = v => (v > 0.004 ? '-' : '') + money(v)
-const whoLabel = p => p === BIZ ? 'Business account' : p
+const whoLabel = p => p === BIZ ? '' : p
 
 function useCentre() {
   useVersion()
@@ -51,40 +52,38 @@ export function MoneyCentreCard() {
         <div><span>Profit</span><b>{sm(t.profit)}</b></div>
       </div>
       <p className="mc-line">{lines[0] || 'Add some payments and the tally shows here.'}</p>
-      {[t.unmarked && `${t.unmarked} not marked B, P or Biz`, late && `${late} invoice${late > 1 ? 's' : ''} overdue`, noRec && `${noRec} missing a receipt`].filter(Boolean).map(x => <span key={x} className="pill orange mc-flag">{x}</span>)}
+      {t.moneyIn > 0 && <p className="small muted mc-against">Money in set against {t.people.map(p => `${p.name} ${money(p.received)}`).join(' · ')}</p>}
+      {[t.unmarked && `${t.unmarked} not marked B or P`, late && `${late} invoice${late > 1 ? 's' : ''} overdue`, noRec && `${noRec} missing a receipt`].filter(Boolean).map(x => <span key={x} className="pill orange mc-flag">{x}</span>)}
     </button>
   )
 }
 
-// Add money in/out that isn't for one job, someone paying themselves, or a settle-up payment between you
+// Add money in/out that isn't for one job, or a settle-up payment between you
 function AddSheet({ start, onClose, owners }) {
   const payers = usePayers()
-  const [d, setD] = useState({ type: 'out', amount: '', date: today(), desc: '', cat: 'materials', payer: '', to: '', ...start })
+  const [d, setD] = useState({ type: 'out', amount: '', date: today(), desc: '', cat: 'materials', payer: '', against: '', person: '', to: '', ...start })
   const set = p => setD(x => ({ ...x, ...p }))
   const save = () => {
     const amount = num(d.amount)
     if (!amount) return alert('Please put in an amount')
     if (isLocked(d.date)) return alert(lockMsg(d.date))
-    if (d.type === 'drawing') {
-      if (!d.to) return alert(`Tap ${payers.map(p => p.letter).join(' or ')} to say who was paid`)
-      put('money', { dir: 'out', cat: 'wages', person: d.to, payer: d.payer || BIZ, amount, date: d.date, desc: d.desc || 'Paid to ' + d.to, status: 'paid' }, { job_id: null })
-    } else if (d.type === 'transfer') {
+    if (d.type === 'transfer') {
       if (!d.payer || !d.to || d.payer === d.to) return alert('Pick who paid and who got the money')
       put('money', { dir: 'out', cat: 'transfer', person: d.to, payer: d.payer, amount, date: d.date, desc: d.desc || `${d.payer} paid ${d.to}`, status: 'paid' }, { job_id: null })
     } else {
       if (!d.desc.trim()) return alert('Please say what it was for')
-      if (!d.payer) return alert(d.type === 'in' ? 'Tap B, P or Biz to say whose account it went into' : 'Tap B, P or Biz to say who paid')
+      if (!d.payer) return alert(d.type === 'in' ? 'Tap B or P to say whose account it went into' : 'Tap B or P to say who paid')
       const dup = findDuplicate({ amount, desc: d.desc, date: d.date })
       if (dup && !confirm(`This looks like a payment already saved: ${dup.data.desc || 'no description'}, ${money(dup.data.amount)} on ${shortDate(dup.data.date)}. Save it anyway?`)) return
-      put('money', { dir: d.type, cat: d.type === 'in' ? 'other' : d.cat, payer: d.payer, amount, date: d.date, desc: d.desc.trim(), status: 'paid' }, { job_id: null })
+      put('money', { dir: d.type, cat: d.type === 'in' ? 'other' : d.cat, payer: d.payer, ...(d.type === 'in' ? { against: d.against || d.payer, person: d.person.trim() } : {}), amount, date: d.date, desc: d.desc.trim(), status: 'paid' }, { job_id: null })
     }
     onClose()
   }
   const other = n => owners.find(o => o !== n) || ''
   return (
-    <Sheet open onClose={onClose} title={{ out: 'Money out', in: 'Money in', drawing: 'Paid myself', transfer: 'Settle up' }[d.type]}>
-      <div className="seg small" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        {[['out', 'Out'], ['in', 'In'], ['drawing', 'Paid myself'], ['transfer', 'Settle up']].map(([k, l]) => <button key={k} className={d.type === k ? 'on' : ''} onClick={() => set({ type: k })}>{l}</button>)}
+    <Sheet open onClose={onClose} title={{ out: 'Money out', in: 'Money in', transfer: 'Settle up' }[d.type]}>
+      <div className="seg small" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        {[['out', 'Out'], ['in', 'In'], ['transfer', 'Settle up']].map(([k, l]) => <button key={k} className={d.type === k ? 'on' : ''} onClick={() => set({ type: k })}>{l}</button>)}
       </div>
       <div className="two">
         <label className="field"><span>Amount (£)</span><input inputMode="decimal" value={d.amount} onChange={e => set({ amount: e.target.value })} placeholder="0.00" /></label>
@@ -94,25 +93,22 @@ function AddSheet({ start, onClose, owners }) {
         <label className="field"><span>What was it for?</span><input value={d.desc} onChange={e => set({ desc: e.target.value })} placeholder={d.type === 'in' ? 'e.g. Cash job' : 'e.g. Tools from Screwfix'} /></label>
         {d.type === 'out' && <label className="field"><span>Type</span>
           <div className="chips">{['materials', 'other'].map(k => <button key={k} className={'chip' + (d.cat === k ? ' on' : '')} onClick={() => set({ cat: k })}>{CAT[k]}</button>)}</div></label>}
-        <label className="field"><span>{d.type === 'in' ? 'Paid into whose account?' : 'Who paid?'}</span><PayerToggle big biz value={d.payer} onChange={p => set({ payer: p })} /></label>
-        <p className="small muted" style={{ marginTop: -6 }}>Biz means the business account.</p>
-      </>}
-      {d.type === 'drawing' && <>
-        <label className="field"><span>Who was paid?</span><PayerToggle big value={d.to} onChange={p => set({ to: p })} /></label>
-        <label className="field"><span>Note (optional)</span><input value={d.desc} onChange={e => set({ desc: e.target.value })} placeholder="e.g. Weekly wage" /></label>
-        <p className="small muted">Money one of you has taken for yourself from the business account. If an invoice was paid straight into your own account, you don't need this: mark that payment B or P instead.</p>
+        {d.type === 'in' && <label className="field"><span>Who paid it?</span><input value={d.person} onChange={e => set({ person: e.target.value })} placeholder="e.g. the client's name" /></label>}
+        <label className="field"><span>{d.type === 'in' ? 'Paid into whose account?' : 'Who paid?'}</span><PayerToggle big value={d.payer} onChange={p => set({ payer: p })} /></label>
+        {d.type === 'in' && <><label className="field"><span>Set against</span><PayerToggle big value={d.against || d.payer} onChange={p => set({ against: p })} /></label>
+          <p className="small muted" style={{ marginTop: -6 }}>Who this money counts for in who owes who. It starts as whoever's account it went into.</p></>}
       </>}
       {d.type === 'transfer' && <>
         <label className="field"><span>Who paid?</span><PayerToggle big value={d.payer} onChange={p => set({ payer: p, to: other(p) })} /></label>
         <label className="field"><span>Who got it?</span><PayerToggle big value={d.to} onChange={p => set({ to: p, payer: other(p) })} /></label>
-        <p className="small muted">Use this when one of you pays the other to square up. It doesn't count as business money in or out, and it stays out of the accountant's spreadsheet.</p>
+        <p className="small muted">Use this when one of you pays the other to square up. It doesn't count as money in or out of the business, and it stays out of the accountant's spreadsheet.</p>
       </>}
       <div className="sheet-actions"><button className="btn primary" onClick={save}>Save</button></div>
     </Sheet>
   )
 }
 
-function ItemRow({ it, biz }) {
+function ItemRow({ it }) {
   const locked = isLocked(it.date)
   const editable = it.kind === 'income' || it.kind === 'expense'
   const setPayer = p => locked ? alert(lockMsg(it.date)) : update(it.id, { payer: p })
@@ -131,9 +127,9 @@ function ItemRow({ it, biz }) {
         {it.desc || CAT[it.cat] || KIND[it.kind]}
         <br /><span className="small muted">{needsReceipt(it) && <span className="mc-norec">no receipt</span>} {it.kind === 'drawing' ? `Paid to ${it.to}` : it.kind === 'transfer' ? `${it.payer} → ${it.to}` : (CAT[it.cat] || KIND[it.kind])}{it.jobName ? ` · ${it.jobName}` : ''}</span>
       </span>
-      {editable && (biz || it.payer !== BIZ)
-        ? <PayerToggle biz={biz} disabled={locked} value={it.payer} onChange={setPayer} />
-        : <span className="payer-chip" title={whoLabel(chip) || 'Not marked'}>{chip === BIZ ? '£' : (chip || '?')[0].toUpperCase()}</span>}
+      {editable
+        ? <PayerToggle disabled={locked} value={it.payer === BIZ ? '' : it.payer} onChange={setPayer} />
+        : <span className="payer-chip" title={whoLabel(chip) || 'Not marked'}>{(whoLabel(chip) || '?')[0].toUpperCase()}</span>}
       <span className={'nowrap ' + (it.kind === 'income' ? 'pos' : it.kind === 'transfer' ? '' : 'neg')}>{sign}{money(it.amount)}</span>
     </div>
   )
@@ -141,17 +137,18 @@ function ItemRow({ it, biz }) {
 
 // ---------- Tally tab ----------
 
-function PersonCard({ p }) {
+// rel = what the other one owes them (+) or they owe the other one (−) to square up
+function PersonCard({ p, rel }) {
   const minus = v => <b className={v ? 'neg' : ''}>{v ? '−' : ''}{money(v)}</b>
   return (
     <section className="card mc-person">
       <div className="card-head"><h2>{p.name}</h2></div>
       <div className="kv"><span>Paid for out of own pocket</span><b>{money(p.putIn)}</b></div>
       <div className="kv"><span>Half the profit</span><b>{sm(p.share)}</b></div>
-      <div className="kv"><span>Money paid into own account</span>{minus(p.received)}</div>
+      <div className="kv"><span>Money in set against them</span>{minus(p.received)}</div>
       <div className="kv"><span>Paid to themselves</span>{minus(p.drew)}</div>
       {(p.sent > 0 || p.got > 0) && <div className="kv"><span>Squared up between you</span><b>{p.sent - p.got >= 0 ? '+' : '−'}{money(Math.abs(p.sent - p.got))}</b></div>}
-      <div className={'kv grand ' + (p.balance >= 0 ? 'pos' : 'neg')}><span>{p.balance >= 0 ? 'Owed to them' : 'Had too much'}</span><b>{money(Math.abs(p.balance))}</b></div>
+      <div className={'kv grand ' + (rel >= 0 ? 'pos' : 'neg')}><span>{rel >= 0 ? 'Owed to them' : 'Owes the other'}</span><b>{money(Math.abs(rel))}</b></div>
     </section>
   )
 }
@@ -161,13 +158,13 @@ function forecast(items, owners) {
   const t0 = today(), end = monthEnd(t0.slice(0, 7))
   const extra = []
   list('invoice', r => r.data.type === 'invoice' && r.data.status !== 'paid' && r.data.status !== 'draft' && (r.data.due || '') <= end)
-    .forEach(r => extra.push({ kind: 'income', amount: invoiceTotals(r.data).total, payer: BIZ, job: r.job_id, date: r.data.due }))
+    .forEach(r => extra.push({ kind: 'income', amount: invoiceTotals(r.data).total, payer: '', job: r.job_id, date: r.data.due }))
   list('genpay').forEach(r => {
     const c = (r.data.created || '').slice(0, 10), from = ymd(new Date(Date.now() - 60 * 864e5))
-    occurrences(r, c > from ? c : from, end).filter(o => !o.paid).forEach(o => extra.push({ kind: r.data.dir === 'in' ? 'income' : 'expense', amount: num(r.data.amount), payer: r.data.payer || BIZ, job: null, date: o.date }))
+    occurrences(r, c > from ? c : from, end).filter(o => !o.paid).forEach(o => extra.push({ kind: r.data.dir === 'in' ? 'income' : 'expense', amount: num(r.data.amount), payer: r.data.payer || '', against: r.data.against || '', job: null, date: o.date }))
   })
   list('money', r => r.data.status === 'upcoming' && (r.data.date || '') <= end)
-    .forEach(r => extra.push({ kind: r.data.dir === 'in' ? 'income' : 'expense', amount: num(r.data.amount), payer: r.data.payer || BIZ, job: r.job_id, date: r.data.date }))
+    .forEach(r => extra.push({ kind: r.data.dir === 'in' ? 'income' : 'expense', amount: num(r.data.amount), payer: r.data.payer || '', against: r.data.against || '', job: r.job_id, date: r.data.date }))
   return { end, count: extra.length, coming: extra.filter(x => x.kind === 'income').reduce((s, x) => s + x.amount, 0), going: extra.filter(x => x.kind === 'expense').reduce((s, x) => s + x.amount, 0), t: tally([...items, ...extra], owners) }
 }
 
@@ -220,13 +217,13 @@ function monthPdf(m, owners, business) {
   autoTable(doc, { startY: doc.lastAutoTable.finalY + 13, headStyles: { fillColor: green }, styles: { fontSize: 10 },
     head: [['', ...sofar.people.map(p => p.name)]],
     body: [['Paid out of own pocket', ...sofar.people.map(p => money(p.putIn))], ['Share of the profit', ...sofar.people.map(p => sm(p.share))],
-      ['Money paid into own account', ...sofar.people.map(p => neg(p.received))], ['Paid to themselves', ...sofar.people.map(p => neg(p.drew))],
-      ['Squared up between you', ...sofar.people.map(p => sm(p.sent - p.got).replace('−', '-'))], ['Owed to them (- means had too much)', ...sofar.people.map(p => sm(p.balance).replace('−', '-'))]] })
+      ['Money in set against them', ...sofar.people.map(p => neg(p.received))], ['Paid to themselves', ...sofar.people.map(p => neg(p.drew))],
+      ['Squared up between you', ...sofar.people.map(p => sm(p.sent - p.got).replace('−', '-'))], ['Owed to them (- means owes the other)', ...sofar.people.map(p => sm(p.balance - (sofar.people.reduce((s, q) => s + q.balance, 0) / 2)).replace('−', '-'))]] })
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
   lines.forEach((l, i) => doc.text(l, M, doc.lastAutoTable.finalY + 9 + i * 6, { maxWidth: 178 }))
   autoTable(doc, { startY: doc.lastAutoTable.finalY + 12 + lines.length * 6, headStyles: { fillColor: green }, styles: { fontSize: 9 },
     head: [['Date', 'What', 'Job', 'Who', 'Amount']],
-    body: inMonth.length ? inMonth.map(it => [shortDate(it.date), it.desc || CAT[it.cat] || KIND[it.kind], it.jobName, it.kind === 'drawing' ? `to ${it.to}` : it.kind === 'transfer' ? `${it.payer} to ${it.to}` : whoLabel(it.payer) || 'Not marked', (it.kind === 'income' ? '+' : it.kind === 'transfer' ? '' : '-') + money(it.amount)]) : [['', 'No payments this month', '', '', '']],
+    body: inMonth.length ? inMonth.map(it => [shortDate(it.date), it.desc || CAT[it.cat] || KIND[it.kind], it.jobName, it.kind === 'drawing' ? `to ${it.to}` : it.kind === 'transfer' ? `${it.payer} to ${it.to}` : it.kind === 'income' ? `Into ${whoLabel(it.payer) || '?'}, set against ${againstOf(it, owners) || '?'}` : whoLabel(it.payer) || 'Not marked', (it.kind === 'income' ? '+' : it.kind === 'transfer' ? '' : '-') + money(it.amount)]) : [['', 'No payments this month', '', '', '']],
     columnStyles: { 4: { halign: 'right' } } })
   return new File([doc.output('blob')], `BP Builders money ${monthName(m)}.pdf`, { type: 'application/pdf' })
 }
@@ -271,15 +268,14 @@ function TallyTab({ items, t, owners, settings, setAdd, setFilter, setTab }) {
       <div className="card-head"><h2>Who's owed what</h2></div>
       {lines.map((l, i) => <p key={i} className={i ? 'small' : 'mc-big'}>{l}</p>)}
       {pay && <button className="btn orange wide" onClick={() => setAdd({ type: 'transfer', payer: pay.from, to: pay.to, amount: pay.amount.toFixed(2) })}><Icon name="check" size={18} /> {pay.from} has paid {pay.to}: record it</button>}
-      {t.unmarked > 0 && <p className="notice small" style={{ marginTop: 10 }}>{t.unmarked} payment{t.unmarked > 1 ? 's aren\'t' : ' isn\'t'} marked B, P or Biz yet, so {t.unmarked > 1 ? 'they count' : 'it counts'} as the business account. <button className="link-btn" onClick={() => { setFilter('none'); setTab('pay') }}>Mark {t.unmarked > 1 ? 'them' : 'it'}</button></p>}
+      {t.unmarked > 0 && <p className="notice small" style={{ marginTop: 10 }}>{t.unmarked} payment{t.unmarked > 1 ? 's aren\'t' : ' isn\'t'} marked B or P yet, so this isn't final. <button className="link-btn" onClick={() => { setFilter('none'); setTab('pay') }}>Mark {t.unmarked > 1 ? 'them' : 'it'}</button></p>}
     </section>
 
-    <div className="mc-people">{t.people.map(p => <PersonCard key={p.name} p={p} />)}</div>
-    <p className="small muted" style={{ margin: '-4px 4px 14px' }}>Profits are split 50/50. Biz means paid from, or into, the business account.</p>
+    <div className="mc-people">{t.people.map(p => <PersonCard key={p.name} p={p} rel={(p.balance - (t.people.reduce((s, q) => s + q.balance, 0) - p.balance)) / 2} />)}</div>
+    <p className="small muted" style={{ margin: '-4px 4px 14px' }}>Profits are split 50/50. There's no business account: these totals add up what's gone in and out of both your accounts.</p>
 
-    <div className="money-actions">
+    <div className="money-actions" style={{ gridTemplateColumns: '1fr 1fr' }}>
       <button className="btn primary" onClick={() => setAdd({ type: 'out' })}><Icon name="plus" size={20} /> Add money</button>
-      <button className="btn orange" onClick={() => setAdd({ type: 'drawing' })}><Icon name="money" size={20} /> Paid myself</button>
       <button className="btn white" onClick={() => setAdd({ type: 'transfer' })}><Icon name="check" size={20} /> Settle up</button>
     </div>
 
@@ -291,13 +287,63 @@ function TallyTab({ items, t, owners, settings, setAdd, setFilter, setTab }) {
         <div className="kv"><span>Still to come in</span><b className="pos">+{money(f.coming)}</b></div>
         <div className="kv"><span>Still to go out</span><b className="neg">−{money(f.going)}</b></div>
         <div className="kv"><span>Profit would be</span><b>{sm(f.t.profit)}</b></div>
-        {f.t.people.map(p => <div key={p.name} className="kv"><span>{p.name} would be</span><b className={p.balance >= 0 ? 'pos' : 'neg'}>{p.balance >= 0 ? 'owed ' : 'over by '}{money(Math.abs(p.balance))}</b></div>)}
-        <p className="small muted">If every invoice due this month is paid (into the business account) and every repeat payment and bill goes out.</p>
+        <div className="kv"><span>Then</span><b>{settle(f.t.people, money).lines[0]}</b></div>
+        <p className="small muted">If every invoice due this month is paid and every repeat payment and bill goes out. Invoices not paid yet aren't set against either of you.</p>
       </>}
       {owed > 0 && <p className="small muted" style={{ marginBottom: 0 }}>{money(owed)} is owed on sent invoices in total.</p>}
     </section>
 
     <MonthTools owners={owners} business={settings.business} />
+  </>
+}
+
+// ---------- Money in tab ----------
+
+// One payment in: who paid it, whose account it went into, and who it's set against
+function MoneyInRow({ it, owners }) {
+  const locked = isLocked(it.date)
+  const set = patch => locked ? alert(lockMsg(it.date)) : update(it.id, patch)
+  const open = () => { if (it.job) nav(`/job/${it.job}/money`); else if (it.src === 'genpay') nav('/cashflow') }
+  const into = owners.includes(it.payer) ? it.payer : ''
+  const against = againstOf(it, owners)
+  return (
+    <div className={'mc-in-row' + (locked ? ' locked' : '')}>
+      <div className="mc-in-top">
+        <span className="small muted nowrap">{shortDate(it.date)}</span>
+        <span className="text tap" onClick={open}><b>{it.desc || 'Money in'}</b><br />
+          <span className="small muted">{it.from ? `From ${it.from}` : it.src === 'genpay' ? 'Repeat payment' : 'Who paid it: not filled in'}{it.jobName ? ` · ${it.jobName}` : ''}</span></span>
+        <span className="nowrap pos">+{money(it.amount)}</span>
+      </div>
+      <div className="mc-in-who">
+        <span>Into</span><PayerToggle disabled={locked} value={into} onChange={p => set({ payer: p })} />
+        <span>Set against</span><PayerToggle disabled={locked} value={against} onChange={p => set({ against: p })} />
+      </div>
+      {into && against && into !== against && <p className="small mc-in-note">Went into {into}'s account, but counts for {against}.</p>}
+    </div>
+  )
+}
+
+function MoneyInTab({ items, owners }) {
+  const [filter, setFilter] = useState('all')
+  const [shown, setShown] = useState(40)
+  const ins = items.filter(it => it.kind === 'income')
+  const sum = arr => arr.reduce((s, it) => s + it.amount, 0)
+  const unmarked = ins.filter(it => !againstOf(it, owners) || !owners.includes(it.payer))
+  const rows = filter === 'all' ? ins : filter === 'none' ? unmarked : ins.filter(it => againstOf(it, owners) === filter)
+  return <>
+    <section className="card">
+      <div className="card-head"><h2>Money in</h2><span className="pill">{money(sum(ins))}</span></div>
+      {owners.map(n => <div key={n} className="kv"><span>Set against {n}<br /><span className="small muted">Paid into {n}'s account: {money(sum(ins.filter(it => it.payer === n)))}</span></span><b className="pos">{money(sum(ins.filter(it => againstOf(it, owners) === n)))}</b></div>)}
+      <p className="small muted" style={{ marginBottom: 0 }}><b>Into</b> is whose bank account the money went into. <b>Set against</b> is who it counts for in who owes who. It starts as the same person, and you can change it.</p>
+    </section>
+    <section className="card">
+      <div className="card-head"><h2>Every payment in</h2><span className="pill">{rows.length}</span></div>
+      <div className="chips mc-filters">{[['all', 'All'], ...owners.map(n => [n, `Set against ${n}`]), ['none', `Not marked${unmarked.length ? ` (${unmarked.length})` : ''}`]].map(([k, l]) => <button key={k} className={'chip' + (filter === k ? ' on' : '')} onClick={() => { setFilter(k); setShown(40) }}>{l}</button>)}</div>
+      {rows.length === 0 && <p className="muted small">{filter === 'none' ? 'Nothing to mark: every payment in is set.' : 'No money in yet.'}</p>}
+      {rows.slice(0, shown).map(it => <MoneyInRow key={it.key} it={it} owners={owners} />)}
+      {rows.length > shown && <button className="btn ghost wide" style={{ marginTop: 10 }} onClick={() => setShown(s => s + 60)}>Show more</button>}
+      <p className="small muted" style={{ marginBottom: 0 }}>Tap a payment to open its job, where you can change who paid it.</p>
+    </section>
   </>
 }
 
@@ -421,9 +467,9 @@ function PaymentsTab({ items, filter, setFilter }) {
   const payers = usePayers()
   const [shown, setShown] = useState(40)
   const noRec = items.filter(needsReceipt).length
-  const filters = [['all', 'All'], ...payers.map(p => [p.name, p.name]), [BIZ, 'Biz'], ['none', 'Not marked'], ['norec', `No receipt${noRec ? ` (${noRec})` : ''}`], ['in', 'In'], ['out', 'Out']]
+  const filters = [['all', 'All'], ...payers.map(p => [p.name, p.name]), ['none', 'Not marked'], ['norec', `No receipt${noRec ? ` (${noRec})` : ''}`], ['in', 'In'], ['out', 'Out']]
   const rows = items.filter(it => filter === 'all' ? true
-    : filter === 'none' ? (it.kind === 'income' || it.kind === 'expense') && !it.payer
+    : filter === 'none' ? (it.kind === 'income' || it.kind === 'expense') && (!it.payer || it.payer === BIZ)
     : filter === 'norec' ? needsReceipt(it)
     : filter === 'in' ? it.kind === 'income'
     : filter === 'out' ? it.kind !== 'income'
@@ -436,9 +482,9 @@ function PaymentsTab({ items, filter, setFilter }) {
     <section className="card">
       <div className="card-head"><h2>Every payment</h2><span className="pill">{rows.length}</span></div>
       <div className="chips mc-filters">{filters.map(([k, l]) => <button key={k} className={'chip' + (filter === k ? ' on' : '')} onClick={() => { setFilter(k); setShown(40) }}>{l}</button>)}</div>
-      <p className="small muted" style={{ marginTop: 0 }}>{filter === 'norec' ? `Payments over £${RECEIPT_OVER} with no receipt photo. Tap one to open its job and add the photo.` : `Tap ${payers.map(p => p.letter).join(', ')}${filter === 'none' ? ' or Biz' : ''} to mark who paid, or whose account the money went into. Tap a payment to open its job.`}</p>
+      <p className="small muted" style={{ marginTop: 0 }}>{filter === 'norec' ? `Payments over £${RECEIPT_OVER} with no receipt photo. Tap one to open its job and add the photo.` : `Tap ${payers.map(p => p.letter).join(' or ')} to mark who paid, or whose account the money went into. Tap a payment to open its job.`}</p>
       {rows.length === 0 && <p className="muted small">Nothing here{filter === 'none' ? ': everything is marked' : ''}.</p>}
-      {rows.slice(0, shown).map(it => <ItemRow key={it.key} it={it} biz={filter === 'none'} />)}
+      {rows.slice(0, shown).map(it => <ItemRow key={it.key} it={it} />)}
       {rows.length > shown && <button className="btn ghost wide" style={{ marginTop: 10 }} onClick={() => setShown(s => s + 60)}>Show more</button>}
     </section>
   </>
@@ -454,9 +500,10 @@ export default function MoneyCentre() {
       <TopBar title="Money centre" sub="All jobs, car costs and repeat payments" onBack={() => back('/')} />
       <main className="content">
         <div className="seg mc-tabs">
-          {[['tally', 'Tally'], ['jobs', 'Jobs'], ['tax', 'Tax'], ['pay', 'Payments']].map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => { setTab(k); window.scrollTo(0, 0) }}>{l}</button>)}
+          {[['tally', 'Tally'], ['in', 'Money in'], ['jobs', 'Jobs'], ['tax', 'Tax'], ['pay', 'Payments']].map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => { setTab(k); window.scrollTo(0, 0) }}>{l}</button>)}
         </div>
         {tab === 'tally' && <TallyTab items={items} t={t} owners={owners} settings={settings} setAdd={setAdd} setFilter={setFilter} setTab={setTab} />}
+        {tab === 'in' && <MoneyInTab items={items} owners={owners} />}
         {tab === 'jobs' && <JobsTab items={items} owners={owners} />}
         {tab === 'tax' && <TaxTab items={items} owners={owners} settings={settings} />}
         {tab === 'pay' && <PaymentsTab items={items} filter={filter} setFilter={setFilter} />}

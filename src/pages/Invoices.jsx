@@ -167,7 +167,7 @@ export function InvoiceEdit({ id, iid }) {
     document.body.appendChild(a); a.click(); a.remove()
   }
   const markPaid = () => { set({ status: 'paid' }); setAskPaid(true) }
-  const addPaid = payer => { put('money', { dir: 'in', cat: 'client', amount: t.total, date: today(), desc: `${label} ${d.number}`, status: 'paid', payer }, { job_id: id }); setAskPaid(false) }
+  const addPaid = payer => { put('money', { dir: 'in', cat: 'client', amount: t.total, date: today(), desc: `${label} ${d.number}`, status: 'paid', payer, against: payer }, { job_id: id }); setAskPaid(false) }
   return (
     <JobShell job={job} tab="invoices" title={`${label} ${d.number}`} onBack={() => nav(`/job/${id}/invoices`)}>
       <div className="action-row">
@@ -192,7 +192,7 @@ export function InvoiceEdit({ id, iid }) {
         </div>
       </section>}
       {d.type === 'invoice' && unbilled.length > 0 && d.status !== 'paid' && <button className="btn soft-orange wide" style={{ marginBottom: 14 }} onClick={() => addExtrasToInvoice(id, iid)}><Icon name="extra" size={18} /> Add {unbilled.length} approved extra{unbilled.length > 1 ? 's' : ''} to this invoice</button>}
-      {askPaid && <WhoPaidSheet into title="Where was it paid?" text={`${money(t.total)} for ${label.toLowerCase()} ${d.number} goes into Money in for this job. Whose account did the client pay into?`} onPick={addPaid} onSkip={() => setAskPaid(false)} onClose={() => setAskPaid(false)} />}
+      {askPaid && <WhoPaidSheet into title="Where was it paid?" text={`${money(t.total)} for ${label.toLowerCase()} ${d.number} goes into Money in for this job. Whose account did the client pay into? (It's set against them too. You can change that in the Money centre under Money in.)`} onPick={addPaid} onSkip={() => setAskPaid(false)} onClose={() => setAskPaid(false)} />}
       {staging && <StageSheet quote={inv} job={job} onClose={() => setStaging(false)} />}
       {preview && <div className="card"><iframe title="Preview" className="pdf-preview" src={preview} /><button className="btn ghost wide" onClick={() => window.open(preview)}>Open full screen</button></div>}
       {!settings.business.name && <p className="notice small">Your business name, logo and bank details aren't added yet. <a href="#/settings">Add them in Settings</a> and they'll appear on every invoice.</p>}

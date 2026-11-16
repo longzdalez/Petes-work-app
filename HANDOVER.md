@@ -39,7 +39,7 @@ The original working name was "Pete Work". You'll still see it in some internal 
   - pdfjs-dist for PDF thumbnails and reading text from PDF receipts
   - tesseract.js for receipt OCR, fully self-hosted in `public/ocr/`
   - @supabase/supabase-js for optional sync
-- **Service worker:** `public/sw.js`. It handles the offline cache, the Web Share Target (sharing files into the app from WhatsApp or email), `periodicsync` reminders and notification clicks. **Bump `CACHE` (currently `pete-work-v17`) every time you publish**, or phones keep the old version.
+- **Service worker:** `public/sw.js`. It handles the offline cache, the Web Share Target (sharing files into the app from WhatsApp or email), `periodicsync` reminders and notification clicks. **Bump `CACHE` (currently `pete-work-v18`) every time you publish**, or phones keep the old version.
 
 ### Build and publish
 
@@ -125,7 +125,7 @@ src/
     Snags.jsx              snagging list, sign-off PDF
     Hours.jsx              workers' hours: hourly / day rate / set amount, work date, pay-by date, pay → Money
     Contacts.jsx           contacts + Renewals (insurance, certificates)
-    MoneyCentre.jsx        Money centre (/money), tabs Tally/Jobs/Tax/Payments: B/P/Biz marking, who owes who (always 50/50), Paid myself, Settle up, late payers, end-of-month forecast, monthly PDF, month lock, profit per job, tax pot, VAT/CIS, spending chart, duplicate + missing-receipt checks. Maths in src/ledger.js
+    MoneyCentre.jsx        Money centre (/money), tabs Tally/Money in/Jobs/Tax/Payments: B/P marking, Money in (who paid, into whose account, set against), who owes who (always 50/50), Settle up, late payers, end-of-month forecast, monthly PDF, month lock, profit per job, tax pot, VAT/CIS, spending chart, duplicate + missing-receipt checks. Maths in src/ledger.js
     CashFlow.jsx           General cash flow (not tied to a job): one-off/weekly/monthly/yearly payments
     Search.jsx, Share.jsx, Settings.jsx
 ```
@@ -153,7 +153,7 @@ Every saved item is a **record**: `{ id, kind, job_id, data, deleted, updated_at
 | `todo` | null = home, or job | text, date, time, urgency, notes, done, doneOn |
 | `task` | job | date, text, urgency, done, trade_id (schedule work) |
 | `trade` | job | name, trade, jobs, value (quote), phone, color, order |
-| `money` | job or null | dir in/out, cat (client/other/wages/contractor/materials/vehicle/transfer), payer (owner name, 'business' = business account, empty = not marked yet), person, amount, vat, date, desc, status paid/upcoming, receipt{path,thumb}, cisRate, cisLabour |
+| `money` | job or null | dir in/out, cat (client/other/wages/contractor/materials/vehicle/transfer), payer (owner name = whose account it came out of / went into; empty or the old 'business' = not marked), against (money in only: who it's set against, Brian or Pete; empty = same as payer), person (for money in: who paid it), amount, vat, date, desc, status paid/upcoming, receipt{path,thumb}, cisRate, cisLabour |
 | `hours` | job | person, payType hour/day/fixed, hours, days, rate, amount, date (work done), payBy, notes, paid, money_id |
 | `genpay` | null | General cash flow: dir, amount, desc, date (first), repeat none/weekly/monthly/yearly, until, paid[] (dates ticked) |
 | `invoice` | job | type quote/invoice, number, status, lines, due, stages… |
@@ -206,7 +206,10 @@ Every saved item is a **record**: `{ id, kind, job_id, data, deleted, updated_at
 The user also asked for a personal app called **"My Life"**, with to-dos, daily practices, a "Shroom Tracker" journal and a combined calendar. It is being handled separately. **Don't build it in this repo.**
 
 ## 9. Money centre rules
-- Every money in/out must be marked B, P or Biz (business account) when saved; invoice-paid and hours-paid ask with WhoPaidSheet.
+- **There is no business account** (the user, 16 Nov): all money goes in and out of Brian's or Pete's own account, and the Money centre adds the two together. So there's no "Biz" option anywhere. Payments marked 'business' before then count as not marked, and show under Not marked to fix.
+- Every money in/out must be marked B or P when saved; invoice-paid and hours-paid ask with WhoPaidSheet.
+- Money in also has **Set against** (B or P), chosen separately from whose account it went into. Who owes who uses Set against (`againstOf` in ledger.js), falling back to the account. The Money in tab lists every payment in with both, and flags ones where they differ.
+- Who owes who: half the gap between the two balances (`settle` in ledger.js). The old "Paid myself" button is gone (with no business account it meant nothing); old drawings still count.
 - Owner wages (cat wages, person = owner) count as that owner taking money (drawings), not a cost. `transfer` = settle-up between owners, left out of the accountant CSV.
 - All profit is split 50/50. No per-job split (the user asked for it to be removed).
 - Settings: `lockedUntil` (ymd, payments on/before can't change), `taxPct` (tax pot %, default 25).
