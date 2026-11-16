@@ -38,7 +38,7 @@ function PaySheet({ entry, onClose }) {
   const save = () => {
     if (!num(d.amount)) return alert('Please put in an amount')
     if (!d.desc.trim()) return alert('Please say what it is for')
-    if (!d.payer) return alert('Tap B, P or Biz to say who pays it')
+    if (!d.payer) return alert('Tap B or P to say who pays it')
     const data = { ...d, amount: num(d.amount), desc: d.desc.trim() }
     if (isNew) put('genpay', { ...data, paid: [] }, { job_id: null }); else update(entry.id, data)
     onClose()
@@ -57,7 +57,7 @@ function PaySheet({ entry, onClose }) {
       <label className="field"><span>How often?</span>
         <div className="seg small" style={{ gridTemplateColumns: 'repeat(4, 1fr)', margin: 0 }}>{REPEAT.map(r => <button key={r.k} className={d.repeat === r.k ? 'on' : ''} onClick={() => set({ repeat: r.k })}>{r.l}</button>)}</div>
       </label>
-      <label className="field"><span>Who pays it?</span><PayerToggle big biz value={d.payer || ''} onChange={p => set({ payer: p })} /></label>
+      <label className="field"><span>Who pays it?</span><PayerToggle big value={d.payer || ''} onChange={p => set({ payer: p })} /></label>
       {d.repeat !== 'none' && <label className="field"><span>Last payment (leave empty if it keeps going)</span><input type="date" value={d.until || ''} onChange={e => set({ until: e.target.value })} /></label>}
       <div className="sheet-actions">
         {!isNew && <button className="btn danger" onClick={() => { if (confirmDelete('this payment')) { remove(entry.id); onClose() } }}><Icon name="trash" size={18} /></button>}

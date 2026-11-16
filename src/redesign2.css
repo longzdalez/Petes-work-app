@@ -56,10 +56,19 @@
 .mc-filters { margin-bottom: 10px; }
 .mc-row .text { min-width: 0; }
 .mc-person .kv b { white-space: nowrap; }
-.mc-tabs { grid-template-columns: repeat(4, 1fr); margin-bottom: 14px; }
+.mc-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 14px; }
+.mc-tabs button { font-size: 13px; padding-left: 2px; padding-right: 2px; white-space: nowrap; }
+.mc-against { margin: 0 0 4px; }
+.mc-in-row { padding: 10px 0; border-top: 1px solid var(--line); }
+.mc-in-row:first-of-type { border-top: 0; }
+.mc-in-row.locked { opacity: .8; }
+.mc-in-top { display: flex; align-items: flex-start; gap: 10px; }
+.mc-in-top .text { flex: 1; min-width: 0; }
+.mc-in-top .pos { font-weight: 900; }
+.mc-in-who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; font-weight: 800; color: var(--muted); }
+.mc-in-who .payer-toggle + span { margin-left: 8px; }
+.mc-in-note { margin: 6px 0 0; color: var(--orange-ink, #b35a14); font-weight: 700; }
 .mc-flag { display: inline-block; margin: 6px 6px 0 0; }
-.payer-toggle button.biz { width: auto; padding: 0 7px; font-size: 11px; }
-.payer-toggle.big button.biz { padding: 0 12px; font-size: 14px; }
 .payer-toggle.locked button { opacity: .55; }
 .mc-row.locked { opacity: .8; }
 .mc-norec { margin: 0 4px 0 0 !important; color: var(--orange-ink, #b35a14); font-size: 11px; font-weight: 800; background: var(--orange-soft); border-radius: 6px; padding: 1px 5px; margin-left: 4px; white-space: nowrap; }
