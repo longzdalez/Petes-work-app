@@ -1,4 +1,4 @@
-const CACHE = 'pete-work-v19';
+const CACHE = 'pete-work-v20';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icons/icon-192.png'];
 
 self.addEventListener('install', e => {
@@ -47,7 +47,7 @@ self.addEventListener('fetch', e => {
   }
 });
 
-// Daily background check for urgent reminders (Android Chrome, installed app)
+// Background check for reminders (Android Chrome, installed app)
 function readDue() {
   return new Promise(res => {
     const q = indexedDB.open('pete-reminders', 1)
@@ -66,9 +66,12 @@ self.addEventListener('periodicsync', e => {
     const { due, sent, db } = await readDue()
     const today = new Date().toISOString().slice(0, 10)
     for (const it of due) {
-      if (sent[it.id + today]) continue
-      await self.registration.showNotification(it.title, { body: it.body, tag: it.id, icon: 'icons/icon-192.png', data: { url: it.url } })
-      sent[it.id + today] = 1
+      // To-do reminders (it.at) show once their time has passed, and only once; the rest once a day
+      const key = it.at ? it.id : it.id + today
+      if (sent[key] || (it.at && it.at > Date.now())) continue
+      const alarm = it.alarm ? { vibrate: [400, 150, 400, 150, 800], requireInteraction: true, renotify: true } : {}
+      await self.registration.showNotification(it.title, { body: it.body, tag: it.id, icon: 'icons/icon-192.png', data: { url: it.url }, ...alarm })
+      sent[key] = 1
     }
     if (db) db.transaction('kv', 'readwrite').objectStore('kv').put(sent, 'sent')
   })())
