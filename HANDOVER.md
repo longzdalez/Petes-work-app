@@ -39,7 +39,7 @@ The original working name was "Pete Work". You'll still see it in some internal 
   - pdfjs-dist for PDF thumbnails and reading text from PDF receipts
   - tesseract.js for receipt OCR, fully self-hosted in `public/ocr/`
   - @supabase/supabase-js for optional sync
-- **Service worker:** `public/sw.js`. It handles the offline cache, the Web Share Target (sharing files into the app from WhatsApp or email), `periodicsync` reminders and notification clicks. **Bump `CACHE` (currently `pete-work-v18`) every time you publish**, or phones keep the old version.
+- **Service worker:** `public/sw.js`. It handles the offline cache, the Web Share Target (sharing files into the app from WhatsApp or email), `periodicsync` reminders and notification clicks. **Bump `CACHE` (currently `pete-work-v19`) every time you publish**, or phones keep the old version.
 
 ### Build and publish
 
@@ -125,7 +125,7 @@ src/
     Snags.jsx              snagging list, sign-off PDF
     Hours.jsx              workers' hours: hourly / day rate / set amount, work date, pay-by date, pay → Money
     Contacts.jsx           contacts + Renewals (insurance, certificates)
-    MoneyCentre.jsx        Money centre (/money), tabs Tally/Money in/Jobs/Tax/Payments: B/P marking, Money in (who paid, into whose account, set against), who owes who (always 50/50), Settle up, late payers, end-of-month forecast, monthly PDF, month lock, profit per job, tax pot, VAT/CIS, spending chart, duplicate + missing-receipt checks. Maths in src/ledger.js
+    MoneyCentre.jsx        Money centre (/money), tabs Tally/Money in/Jobs/Tax/Payments: starting point (lump sums from before the app), B/P marking, Money in (who paid, into whose account, set against), who owes who (always 50/50), Settle up, late payers, end-of-month forecast, monthly PDF, month lock, profit per job, tax pot, VAT/CIS, spending chart, duplicate + missing-receipt checks. Maths in src/ledger.js
     CashFlow.jsx           General cash flow (not tied to a job): one-off/weekly/monthly/yearly payments
     Search.jsx, Share.jsx, Settings.jsx
 ```
@@ -213,3 +213,4 @@ The user also asked for a personal app called **"My Life"**, with to-dos, daily 
 - Owner wages (cat wages, person = owner) count as that owner taking money (drawings), not a cost. `transfer` = settle-up between owners, left out of the accountant CSV.
 - All profit is split 50/50. No per-job split (the user asked for it to be removed).
 - Settings: `lockedUntil` (ymd, payments on/before can't change), `taxPct` (tax pot %, default 25).
+- **Starting point** (16 Nov): `settings.data.opening = { date, in, materials, wages, other, owed }`. `in`/`materials`/`wages`/`other` are `{ ownerName: £ }` lump sums for everything before the app; `owed = { by, to, amount }` is money already owed between them. `openingItems()` in ledger.js turns it into dated items (src 'opening', not editable from the lists) that go into every Money centre total. `owed` counts like the creditor having lent the debtor that amount. Set on the Tally tab, card "Starting point".

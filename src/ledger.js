@@ -28,7 +28,33 @@ export function allItems(owners) {
     if (!a) return
     ;(d.paid || []).filter(x => x <= t).forEach(date => out.push({ key: r.id + date, id: r.id, src: 'genpay', kind: d.dir === 'in' ? 'income' : 'expense', amount: a, date, desc: d.desc || 'Repeat payment', cat: 'repeat', payer: d.payer || '', against: d.against || '', from: '', to: '', job: null, jobName: '' }))
   })
+  out.push(...openingItems(owners))
   return out.sort((a, b) => b.date.localeCompare(a.date))
+}
+
+// The starting point: lump sums for everything before you started using the app (Settings record, data.opening).
+// opening = { date, in: { name: £ }, materials: { name: £ }, wages: { name: £ }, other: { name: £ }, owed: { by, to, amount } }
+export const OPENING_ROWS = [
+  { k: 'in', l: 'Money in', kind: 'income', cat: 'other', hint: 'set against each of you' },
+  { k: 'materials', l: 'Materials paid out', kind: 'expense', cat: 'materials', hint: 'paid by each of you' },
+  { k: 'wages', l: 'Wages paid out', kind: 'expense', cat: 'wages', hint: 'workers and subcontractors, paid by each of you' },
+  { k: 'other', l: 'Other costs', kind: 'expense', cat: 'other', hint: 'anything else, paid by each of you' },
+]
+export const openingOf = () => list('settings')[0]?.data?.opening || null
+export function openingItems(owners) {
+  const o = openingOf()
+  if (!o) return []
+  const date = o.date || '2000-01-01', out = []
+  const base = { id: null, src: 'opening', date, to: '', job: null, jobName: '', against: '', from: '' }
+  OPENING_ROWS.forEach(r => owners.forEach(n => {
+    const a = num(o[r.k]?.[n])
+    if (a > 0) out.push({ ...base, key: `opening-${r.k}-${n}`, kind: r.kind, cat: r.cat, amount: a, desc: `Starting point: ${r.l.toLowerCase()}`, payer: n, against: r.kind === 'income' ? n : '' })
+  }))
+  // "Brian owes Pete £200" works like Pete having lent Brian £200
+  const ow = o.owed || {}
+  if (num(ow.amount) > 0 && owners.includes(ow.by) && owners.includes(ow.to) && ow.by !== ow.to)
+    out.push({ ...base, key: 'opening-owed', kind: 'transfer', cat: 'transfer', amount: num(ow.amount), desc: `Starting point: ${ow.by} already owed ${ow.to}`, payer: ow.to, to: ow.by })
+  return out
 }
 
 // Each owner's running position. Positive balance = owed to them, negative = they've had too much.
