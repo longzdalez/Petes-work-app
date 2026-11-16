@@ -14,7 +14,7 @@ function RemindersCard() {
     <section className="card">
       <div className="card-head"><h2>Reminders</h2></div>
       <div className="toggle-row">
-        <span><b>Urgent reminders</b><br /><span className="small muted">A phone notification 2 days before any material, to-do or schedule item marked red (urgent)</span></span>
+        <span><b>Reminders</b><br /><span className="small muted">A phone notification 2 days before any material, to-do or schedule item marked red (urgent), and at the time you pick when you tap the bell on a to-do</span></span>
         <button className={'switch' + (on ? ' on' : '')} aria-pressed={on} disabled={!canNotify()} onClick={async () => {
           setErr('')
           if (on) { disableReminders(); setOn(false); return }
