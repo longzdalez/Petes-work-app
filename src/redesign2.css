@@ -69,6 +69,10 @@
 .mc-in-who .payer-toggle + span { margin-left: 8px; }
 .mc-in-note { margin: 6px 0 0; color: var(--orange-ink, #b35a14); font-weight: 700; }
 .mc-flag { display: inline-block; margin: 6px 6px 0 0; }
+/* To-do reminders */
+.todo-bell { color: var(--muted); }
+.todo-bell.on { color: #fff; background: var(--orange); border-radius: 10px; }
+.todo-remind { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 12px; font-weight: 800; color: var(--orange-ink, #b35a14); white-space: nowrap; }
 .start-grid { display: grid; grid-template-columns: minmax(0, 1fr) 104px 104px; gap: 8px; align-items: center; margin-bottom: 8px; }
 .start-grid > b { font-size: 13px; text-align: center; color: var(--muted); }
 .start-grid .veh-amt { width: auto; }

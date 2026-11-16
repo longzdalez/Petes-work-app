@@ -1,5 +1,6 @@
-// Phone notifications for urgent things due within 2 days.
-// Shown when the app is opened, and (on Android Chrome, installed app) by a daily background check.
+// Phone notifications: urgent things due within 2 days, and to-do reminders at the time picked (data.remind = 'YYYY-MM-DDTHH:MM').
+// Shown when the app is open (to-do reminders right on time), and on Android Chrome (installed app) by a background check
+// that runs a few times a day at most. A web app can't wake a phone at an exact time when it's fully closed.
 import { list, subscribe } from './store'
 import { today, parseYmd, ymd, shortDate } from './util'
 
@@ -7,6 +8,13 @@ const LS_ON = 'pw_notify'
 const LS_SENT = 'pw_notified'
 export const remindersOn = () => localStorage.getItem(LS_ON) === '1' && 'Notification' in window && Notification.permission === 'granted'
 export const canNotify = () => 'Notification' in window && 'serviceWorker' in navigator
+
+// Local date and time as 'YYYY-MM-DDTHH:MM', the same shape as a to-do's reminder
+export const nowLocal = () => { const d = new Date(); return `${ymd(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+const atMs = s => new Date(s).getTime()
+export const niceRemind = s => s ? `${shortDate(s.slice(0, 10))} at ${s.slice(11, 16)}` : ''
+const remindTodos = () => list('todo', r => r.data.remind && !r.data.done && r.data.text)
+const remindItem = (r, jobs) => ({ id: `${r.id}@${r.data.remind}`, title: `Reminder: ${r.data.text}`, body: `${r.job_id && jobs[r.job_id] ? jobs[r.job_id].data.name + ': ' : ''}${niceRemind(r.data.remind)}`, url: r.job_id ? `#/job/${r.job_id}/todos` : '#/', alarm: true, at: atMs(r.data.remind) })
 
 export function dueReminders() {
   const t = today()
@@ -19,6 +27,7 @@ export function dueReminders() {
   const folders = Object.fromEntries(list('folder').map(f => [f.id, f]))
   list('material', r => soon(r) && folders[r.data.folder_id] && r.data.text).forEach(r => out.push({ id: r.id + r.data.date, title: `Urgent: order ${r.data.text}`, body: `${name(r)}needed ${shortDate(r.data.date)}`, due: r.data.date, url: `#/job/${r.job_id}/folder/${r.data.folder_id}` }))
   list('todo', r => soon(r) && r.data.text).forEach(r => out.push({ id: r.id + r.data.date, title: `Urgent to-do: ${r.data.text}`, body: `${name(r)}${shortDate(r.data.date)}${r.data.time ? ' at ' + r.data.time : ''}`, due: r.data.date, url: r.job_id ? `#/job/${r.job_id}/todos` : '#/' }))
+  remindTodos().filter(r => r.data.remind <= nowLocal()).forEach(r => out.push(remindItem(r, jobs)))
   list('task', r => soon(r) && r.data.text).forEach(r => out.push({ id: r.id + r.data.date, title: `Urgent: ${r.data.text}`, body: `${name(r)}planned for ${shortDate(r.data.date)}`, due: r.data.date, url: `#/job/${r.job_id}/schedule` }))
   return out
 }
@@ -39,7 +48,9 @@ async function show(items) {
   for (const it of items) {
     if (sent[it.id]) continue
     try {
-      if (reg) await reg.showNotification(it.title, { body: it.body, tag: it.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: it.url } })
+      // To-do reminders buzz harder and stay on screen until dealt with, like an alarm
+      const alarm = it.alarm ? { vibrate: [400, 150, 400, 150, 800], requireInteraction: true, renotify: true } : {}
+      if (reg) await reg.showNotification(it.title, { body: it.body, tag: it.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: it.url }, ...alarm })
       else new Notification(it.title, { body: it.body, tag: it.id })
       sent[it.id] = Date.now()
     } catch { }
@@ -47,10 +58,23 @@ async function show(items) {
   localStorage.setItem(LS_SENT, JSON.stringify(sent))
 }
 
+// While the app is open, wake up exactly when the next to-do reminder is due
+let timer = null
+function scheduleNext() {
+  clearTimeout(timer)
+  const now = Date.now()
+  const next = remindTodos().map(r => atMs(r.data.remind)).filter(t => t > now).sort((a, b) => a - b)[0]
+  if (next) timer = setTimeout(checkReminders, Math.min(next - now + 500, 6 * 3600 * 1000))
+}
+
 export function checkReminders() {
   const items = dueReminders()
-  saveForBackground(items)
+  // The background check also gets the to-do reminders still to come, and shows each one once its time has passed
+  const jobs = Object.fromEntries(list('job').map(j => [j.id, j]))
+  const later = remindTodos().filter(r => r.data.remind > nowLocal()).map(r => remindItem(r, jobs))
+  saveForBackground([...items, ...later])
   show(items)
+  scheduleNext()
 }
 
 export async function enableReminders() {
@@ -58,11 +82,11 @@ export async function enableReminders() {
   const p = await Notification.requestPermission()
   if (p !== 'granted') throw new Error('Notifications were blocked. You can allow them in your phone settings for this app.')
   localStorage.setItem(LS_ON, '1')
+  checkReminders()
   try {
     const reg = await navigator.serviceWorker.ready
     if (reg.periodicSync) await reg.periodicSync.register('reminders', { minInterval: 6 * 3600 * 1000 })
   } catch { }
-  checkReminders()
 }
 export function disableReminders() { localStorage.setItem(LS_ON, '0') }
 
