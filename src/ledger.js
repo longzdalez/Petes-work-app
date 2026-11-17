@@ -33,7 +33,7 @@ export function allItems(owners) {
 }
 
 // The starting point: lump sums for everything before you started using the app (Settings record, data.opening).
-// opening = { date, in: { name: £ }, materials: { name: £ }, wages: { name: £ }, other: { name: £ }, owed: { by, to, amount } }
+// opening = { date, in: { name: £ }, materials: { name: £ }, wages: { name: £ }, other: { name: £ }, owed: { by, to, amount }, between: { name: £ paid to the other } }
 export const OPENING_ROWS = [
   { k: 'in', l: 'Money in', kind: 'income', cat: 'other', hint: 'set against each of you' },
   { k: 'materials', l: 'Materials paid out', kind: 'expense', cat: 'materials', hint: 'paid by each of you' },
@@ -54,6 +54,12 @@ export function openingItems(owners) {
   const ow = o.owed || {}
   if (num(ow.amount) > 0 && owners.includes(ow.by) && owners.includes(ow.to) && ow.by !== ow.to)
     out.push({ ...base, key: 'opening-owed', kind: 'transfer', cat: 'transfer', amount: num(ow.amount), desc: `Starting point: ${ow.by} already owed ${ow.to}`, payer: ow.to, to: ow.by })
+  // Money already paid between you: "Pete paid Brian £100" works like a transfer from Pete to Brian
+  const bw = o.between || {}
+  owners.forEach(n => {
+    const a = num(bw[n]), to = owners.find(x => x !== n)
+    if (a > 0 && to) out.push({ ...base, key: `opening-between-${n}`, kind: 'transfer', cat: 'transfer', amount: a, desc: `Starting point: ${n} paid ${to}`, payer: n, to })
+  })
   return out
 }
 

@@ -319,6 +319,7 @@ function StartingPoint({ owners }) {
           <div><span>Owed</span><b>{num(o.owed?.amount) > 0 ? money(num(o.owed.amount)) : '–'}</b></div>
         </div>
         {num(o.owed?.amount) > 0 && <p className="small" style={{ margin: 0 }}>{o.owed.by} already owed {o.owed.to} {money(num(o.owed.amount))}.</p>}
+        {owners.some(n => num(o.between?.[n]) > 0) && <p className="small" style={{ margin: 0 }}>{owners.filter(n => num(o.between?.[n]) > 0).map(n => `${n} paid ${owners.find(x => x !== n)} ${money(num(o.between[n]))}`).join('. ')}.</p>}
       </>}
       {open && <StartingPointSheet owners={owners} onClose={() => setOpen(false)} />}
     </section>
@@ -328,7 +329,7 @@ function StartingPoint({ owners }) {
 function StartingPointSheet({ owners, onClose }) {
   const o = openingOf() || {}
   const [d, setD] = useState(() => {
-    const v = { date: o.date || today(), owed: { by: o.owed?.by || '', to: o.owed?.to || '', amount: o.owed?.amount ? String(o.owed.amount) : '' } }
+    const v = { date: o.date || today(), owed: { by: o.owed?.by || '', to: o.owed?.to || '', amount: o.owed?.amount ? String(o.owed.amount) : '' }, between: Object.fromEntries(owners.map(n => [n, o.between?.[n] ? String(o.between[n]) : ''])) }
     OPENING_ROWS.forEach(r => { v[r.k] = Object.fromEntries(owners.map(n => [n, o[r.k]?.[n] ? String(o[r.k][n]) : ''])) })
     return v
   })
@@ -337,7 +338,7 @@ function StartingPointSheet({ owners, onClose }) {
   const other = n => owners.find(x => x !== n) || ''
   const save = () => {
     if (num(d.owed.amount) > 0 && !d.owed.by) return alert('Tap who owed the money')
-    const v = { date: d.date || today(), owed: num(d.owed.amount) > 0 ? { by: d.owed.by, to: d.owed.to, amount: num(d.owed.amount) } : null }
+    const v = { date: d.date || today(), owed: num(d.owed.amount) > 0 ? { by: d.owed.by, to: d.owed.to, amount: num(d.owed.amount) } : null, between: Object.fromEntries(owners.map(n => [n, num(d.between[n])])) }
     OPENING_ROWS.forEach(r => { v[r.k] = Object.fromEntries(owners.map(n => [n, num(d[r.k][n])])) })
     setS({ opening: v }); onClose()
   }
@@ -357,6 +358,9 @@ function StartingPointSheet({ owners, onClose }) {
       <p className="small muted" style={{ marginTop: 0 }}>Only if there's money owed that isn't covered by the boxes above.</p>
       <label className="field"><span>Who owed it?</span><PayerToggle big value={d.owed.by} onChange={p => setOwed({ by: p, to: other(p) })} /></label>
       <label className="field"><span>{d.owed.by ? `${d.owed.by} owed ${d.owed.to} (£)` : 'How much (£)'}</span><input inputMode="decimal" placeholder="0.00" value={d.owed.amount} onChange={e => setOwed({ amount: e.target.value })} /></label>
+      <h3 className="sub-h">Paid between you</h3>
+      <p className="small muted" style={{ marginTop: 0 }}>Money already sent from one of your accounts to the other. Leave empty if none.</p>
+      {owners.map(n => <label key={n} className="field"><span>{n} paid {other(n)} (£)</span><input inputMode="decimal" placeholder="0.00" value={d.between[n]} onChange={e => setD(x => ({ ...x, between: { ...x.between, [n]: e.target.value } }))} /></label>)}
       <div className="sheet-actions">
         {openingOf() && <button className="btn danger" onClick={clear}><Icon name="trash" size={18} /></button>}
         <button className="btn primary" onClick={save}>Save</button>
