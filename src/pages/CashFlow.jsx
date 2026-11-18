@@ -1,4 +1,4 @@
-// Recurring payments (was Repeat payments): business payments that aren't tied to one job (van, insurance, phone, loan…), one-off or repeating
+// Repeat payments (was General cash flow): business payments that aren't tied to one job (van, insurance, phone, loan…), one-off or repeating
 import { useState } from 'react'
 import { put, update, remove, useList } from '../store'
 import { Icon, Sheet, Field, TopBar, Empty, confirmDelete } from '../ui'
