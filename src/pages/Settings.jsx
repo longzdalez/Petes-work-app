@@ -7,6 +7,19 @@ import { accountantCsv } from './Money'
 import { shareOrDownload, shareText } from '../files'
 import { canNotify, remindersOn, enableReminders, disableReminders } from '../reminders'
 
+// Whose phone this is: Add money then reads "Paid Pete" or "Paid Brian" on this phone
+function PhoneCard() {
+  const s = useSettings()
+  const [me, setMe] = useState(localStorage.getItem('pw_me') || s.owners[0] || '')
+  return (
+    <section className="card">
+      <div className="card-head"><h2>This phone</h2></div>
+      <p className="small muted" style={{ marginTop: 0 }}>Whose phone is this? On this phone, Add money then reads Paid {me || 'you'}.</p>
+      <div className="chips">{s.owners.map(n => <button key={n} className={'chip' + (me === n ? ' on' : '')} onClick={() => { localStorage.setItem('pw_me', n); setMe(n) }}>{n}</button>)}</div>
+    </section>
+  )
+}
+
 function RemindersCard() {
   const [on, setOn] = useState(remindersOn())
   const [err, setErr] = useState('')
@@ -143,6 +156,7 @@ export default function Settings() {
         </section>
 
         <BackupCard />
+        <PhoneCard />
         <RemindersCard />
         <AccountantCard />
 

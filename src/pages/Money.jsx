@@ -34,7 +34,7 @@ export function accountantCsv(from, to) {
 }
 
 const CATS_IN = [{ k: 'client', l: 'Client payment' }, { k: 'other', l: 'Other' }]
-const CATS_OUT = [{ k: 'wages', l: 'Proprietor wages' }, { k: 'contractor', l: 'Subcontractor' }, { k: 'materials', l: 'Materials' }, { k: 'other', l: 'Other' }]
+const CATS_OUT = [{ k: 'other', l: 'Miscellaneous' }, { k: 'wages', l: 'Proprietor wages' }, { k: 'contractor', l: 'Subcontractor' }, { k: 'materials', l: 'Materials' }]
 const catLabel = (dir, k) => k === 'vehicle' ? 'Car' : (dir === 'in' ? CATS_IN : CATS_OUT).find(c => c.k === k)?.l || 'Other'
 const byDate = (a, b) => (a.data.date || '').localeCompare(b.data.date || '') || a.data.created.localeCompare(b.data.created)
 

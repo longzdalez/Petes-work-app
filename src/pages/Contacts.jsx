@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { put, update, remove, useList } from '../store'
 import { Icon, Sheet, Field, Empty, TopBar, confirmDelete } from '../ui'
-import { back } from '../router'
+import { back, nav } from '../router'
 import { initials, niceDate, today } from '../util'
 import { whatsApp } from '../files'
 
@@ -23,8 +23,18 @@ function ContactSheet({ contact, onClose }) {
   const [d, setD] = useState({ name: '', company: '', role: 'supplier', trade: '', phone: '', email: '', notes: '', ...contact.data })
   const set = p => setD(x => ({ ...x, ...p }))
   const save = () => { if (!d.name.trim() && !d.company.trim()) return alert('Please add a name'); if (isNew) put('contact', d); else update(contact.id, d); onClose() }
+  // Chrome on Android can read the phone's own contacts; elsewhere the button is hidden
+  const canPick = typeof navigator !== 'undefined' && !!navigator.contacts?.select
+  const pick = async () => {
+    try {
+      const [c] = await navigator.contacts.select(['name', 'tel', 'email'], { multiple: false })
+      if (!c) return
+      set({ name: c.name?.[0] || d.name, phone: c.tel?.[0] || d.phone, email: c.email?.[0] || d.email })
+    } catch { /* cancelled */ }
+  }
   return (
     <Sheet open onClose={onClose} title={isNew ? 'New contact' : d.name || d.company}>
+      {canPick && <button className="btn ghost wide" style={{ marginBottom: 12 }} onClick={pick}><Icon name="users" size={18} /> Pick from phone contacts</button>}
       <div className="chips" style={{ marginBottom: 12 }}>{Object.entries(ROLES).map(([k, l]) => <button key={k} className={'chip' + (d.role === k ? ' on' : '')} onClick={() => set({ role: k })}>{l}</button>)}</div>
       <div className="two">
         <Field label="Name" value={d.name} onChange={v => set({ name: v })} />
@@ -41,6 +51,31 @@ function ContactSheet({ contact, onClose }) {
         <button className="btn primary" onClick={save}>Save</button>
       </div>
     </Sheet>
+  )
+}
+
+// Compact contacts list for the home page (first few, with a link to the full list)
+export function ContactsBox() {
+  const contacts = useList('contact', null, (a, b) => (a.data.name || a.data.company || '').localeCompare(b.data.name || b.data.company || ''))
+  const [edit, setEdit] = useState(null)
+  return (
+    <section className="card">
+      <div className="card-head"><h2>Contacts</h2><button className="btn primary small" onClick={() => setEdit({ data: {} })}><Icon name="plus" size={16} /> Add</button></div>
+      {contacts.length === 0 && <p className="muted small" style={{ marginTop: 0 }}>Names, trades, phone numbers and emails. Add the people you use most, or pick them from your phone.</p>}
+      {contacts.slice(0, 6).map(c => (
+        <div key={c.id} className="list-card" onClick={() => setEdit(c)} role="button">
+          <div className="avatar">{initials(c.data.name || c.data.company || '?')}</div>
+          <div className="text">
+            <b>{c.data.name || c.data.company}</b>
+            <span>{c.data.trade || ROLES[c.data.role]}</span>
+          </div>
+          <ContactActions c={c} />
+        </div>
+      ))}
+      {contacts.length > 6 && <p className="small muted">+{contacts.length - 6} more</p>}
+      <button className="btn ghost wide" style={{ marginTop: 10 }} onClick={() => nav('/contacts')}><Icon name="users" size={18} /> All contacts</button>
+      {edit && <ContactSheet contact={edit} onClose={() => setEdit(null)} />}
+    </section>
   )
 }
 

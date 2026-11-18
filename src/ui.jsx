@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DAYS, MONTHS, URGENCY, monthGrid, today, ymd, vibrate } from './util'
+import { useUndo, undoDelete } from './store'
 
 const PATHS = {
   back: 'M15 18l-6-6 6-6',
@@ -304,6 +305,12 @@ export function Suggest({ id, values }) {
 }
 
 export function Toast({ text }) { return text ? <div className="toast">{text}</div> : null }
+// Shows after a swipe-delete for 3 seconds, with Undo
+export function UndoBar() {
+  const u = useUndo()
+  if (!u) return null
+  return <div className="undo-bar" role="status"><span>{u.label} deleted</span><button onClick={undoDelete}>Undo</button></div>
+}
 
 // BP Builders logo: a roof over the letters, in the app's greens with an orange chimney
 export function Logo({ big }) {

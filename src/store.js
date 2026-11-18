@@ -32,9 +32,22 @@ export function uid() {
 
 // ---- reading ----
 export function get(id) { const r = records[id]; return r && !r.deleted ? r : null }
+// Swipe-deletes wait 3 seconds, so an accidental swipe can be undone
+const hidden = new Set()
+let undo = null, undoTimer = null
 export function list(kind, filter) {
-  return Object.values(records).filter(r => r.kind === kind && !r.deleted && (!filter || filter(r)))
+  return Object.values(records).filter(r => r.kind === kind && !r.deleted && !hidden.has(r.id) && (!filter || filter(r)))
 }
+export function removeWithUndo(id, label) {
+  if (undo) { clearTimeout(undoTimer); const u = undo; undo = null; hidden.delete(u.id); remove(u.id) }
+  hidden.add(id); undo = { id, label }; emit()
+  undoTimer = setTimeout(() => { const u = undo; undo = null; hidden.delete(u.id); remove(u.id); emit() }, 3000)
+}
+export function undoDelete() {
+  if (!undo) return
+  clearTimeout(undoTimer); hidden.delete(undo.id); undo = null; emit()
+}
+export function useUndo() { useVersion(); return undo }
 
 // React hooks: re-render whenever any data changes.
 export function useVersion() { return useSyncExternalStore(subscribe, () => version) }

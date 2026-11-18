@@ -11,7 +11,7 @@ import { JOB_STATUS, jobProgress, applyTemplate, smallImage, jobStatus } from '.
 import { pickFile } from '../files'
 import { invoiceTotals } from '../pdf'
 import { extraTotal } from './Extras'
-import { daysUntil } from './Contacts'
+import { daysUntil, ContactsBox } from './Contacts'
 import { TodoList } from '../Todos'
 import { ScopeAndValue } from './Job'
 import { GeneralCashFlow } from './CashFlow'
@@ -62,7 +62,7 @@ function NewJobSheet({ open, onClose }) {
     onClose(); nav(`/job/${j.id}`)
   }
   return (
-    <Sheet open onClose={onClose} title="New job">
+    <Sheet open={open} onClose={onClose} title="New job">
       <label className="field"><span>Job name</span><input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Smith rear extension" /></label>
       <div className="two">
         <label className="field"><span>Client</span><input value={client} onChange={e => setClient(e.target.value)} /></label>
@@ -194,6 +194,9 @@ export function FinishedJobs() {
   )
 }
 
+// Whose phone this is (Pete or Brian), chosen in Settings. Defaults to the first owner.
+export const mePhone = owners => localStorage.getItem('pw_me') || owners[0] || 'Pete'
+
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
 
 // Everything that needs attention across every job
@@ -215,7 +218,6 @@ export default function Home() {
   const onsite = allJobs.filter(j => jobStatus(j.data) === 'onsite')
   const t = today()
   const people = new Set(list('task', r => r.data.date === t && r.data.trade_id && onsite.some(j => j.id === r.job_id)).map(r => r.data.trade_id)).size
-  const summary = [onsite.length ? `${onsite.length} job${onsite.length > 1 ? 's' : ''} on site` : 'No jobs on site', urgent ? `${urgent} urgent` : 'nothing urgent'].join(' · ')
   return (
     <div className="page">
       <header className="home-hero">
@@ -227,9 +229,9 @@ export default function Home() {
             <Icon name="settings" size={20} /></button>
         </div>
         <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${settings.owners[0]}` : ''}</div>
-        <div className="hh-sum">{summary}</div>
       </header>
-      <main className="content home-content">
+      <div className="home-pager">
+        <section className="home-page" id="home-page-1">
         <div className="hero-stats">
           <div className="hs"><span>Owed to you</span><b className="pos">{shortMoney(owedTotal)}</b><small>{owed.length} invoice{owed.length === 1 ? '' : 's'}</small></div>
           <div className={'hs' + (urgent ? ' hot' : '')}><span>Urgent</span><b>{urgent}</b><small>due in 2 days</small></div>
@@ -237,21 +239,27 @@ export default function Home() {
         </div>
         <div className="quick">
           <button onClick={() => setPick('scan')}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
-          <button onClick={() => setPick('add')}><span className="q-ic green"><Icon name="money" size={24} /></span>Add money</button>
+          <button onClick={() => setPick('add')}><span className="q-ic green"><Icon name="money" size={24} /></span>{`Paid ${mePhone(settings.owners)}`}</button>
           <button onClick={() => setCar(true)} aria-label="Vehicle costs: ULEZ, congestion, fuel, tickets"><span className="q-ic white"><CarIcon /></span></button>
           <button onClick={() => setAdding(true)}><span className="q-ic white"><Icon name="plus" size={24} /></span>New job</button>
-          <button onClick={() => document.getElementById('home-todo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
+          <button onClick={() => document.getElementById('home-page-2')?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
         </div>
         <BackupReminder />
         <TodayCard />
-        <MoneyCentreCard />
-        <div id="home-todo" className="anchor"><TodoList title="To-do" /></div>
-        <GeneralCashFlow />
-        <div className="home-tools">
-          <button className="btn ghost" onClick={() => nav('/contacts')}><Icon name="users" size={18} /> Contacts</button>
-          <button className="btn ghost" onClick={() => nav('/renewals')}><Icon name="shield" size={18} /> Renewals</button>
-          <button className="btn ghost" onClick={() => nav('/cashflow')}><Icon name="money" size={18} /> Repeat payments</button>
-        </div>
+        </section>
+        <section className="home-page" id="home-page-2">
+          <TodoList title="To-do" />
+          <TodoList title="To Get" kind="toget" showCalendar={false} />
+          <MoneyCentreCard />
+        </section>
+        <section className="home-page">
+          <GeneralCashFlow />
+        </section>
+        <section className="home-page">
+          <ContactsBox />
+        </section>
+        <section className="home-page">
+        <main className="content home-content home-jobs-page">
         <div className="section-head">
           <h2>Jobs</h2>
           <div className="head-btns">
@@ -271,7 +279,9 @@ export default function Home() {
           <span className="pill">{finished.length}</span>
           <Icon name="right" size={20} />
         </button>}
-      </main>
+        </main>
+        </section>
+        </div>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
       <NewJobSheet open={adding} onClose={() => setAdding(false)} />
       <JobPickSheet action={pick} onClose={() => setPick(null)} />
