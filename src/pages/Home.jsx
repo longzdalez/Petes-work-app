@@ -17,10 +17,12 @@ import { ScopeAndValue } from './Job'
 import { GeneralCashFlow } from './CashFlow'
 import { MoneyCentreCard } from './MoneyCentre'
 import { VehicleSheet, CarIcon } from '../Vehicle'
+import { JobCalendar } from './Calendar'
 import '../home-pager.css'
+import '../home-calendar.css'
 
-// The five home pages, switched only from the swipe bar so swiping a list never turns the page
-const PAGE_TABS = ['Today', 'To-do', 'Money', 'Contacts', 'Jobs']
+// The home pages, switched only from the swipe bar so swiping a list never turns the page
+const PAGE_TABS = ['Today', 'To-do', 'Money', 'Calendar', 'Contacts', 'Jobs']
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -92,13 +94,14 @@ function JobCard({ job, onLong }) {
   return (
     <div className="job-card2" {...lp} role="button" tabIndex={0}>
       <div className={'jc-cover st-' + st}>
-        {d.cover ? <img src={d.cover} alt="" /> : <span className="jc-initials">{initials(d.name)}</span>}
+        {d.cover && <img src={d.cover} alt="" />}
         <span className={'status-pill on-cover st-' + st}>{JOB_STATUS[st]}</span>
       </div>
       <div className="jc-body">
         <div className="jc-main">
-          <div className="job-name">{d.name || 'Untitled job'}</div>
-          <div className="job-meta">{[d.client, d.address?.split('\n')[0]].filter(Boolean).join(' · ') || 'Hold to add details'}</div>
+          <div className="job-name">{d.client || d.name || 'Untitled job'}</div>
+          <div className="job-meta">{d.address?.split('\n')[0] || 'No address yet'}</div>
+          <div className="jc-scope">{d.scope || 'No scope of works yet'}</div>
           {prog && st !== 'finished' ? <>
             <div className="progress"><div style={{ width: prog.pct + '%' }} /></div>
             <div className="job-start">{prog.label}</div>
@@ -123,15 +126,15 @@ function JobPickSheet({ action, onClose }) {
       <div className="pick-list">
         {jobs.map(j => <button key={j.id} className="pick-row" onClick={() => go(j)}><span className="job-avatar small">{j.data.cover ? <img src={j.data.cover} alt="" /> : initials(j.data.name)}</span><span className="text"><b>{j.data.name || 'Untitled job'}</b><span>{j.data.client}</span></span><Icon name="right" size={20} /></button>)}
       </div>
-      <p className="small muted">For business payments not tied to a job, like van finance, use Repeat payments on the home page.</p>
+      <p className="small muted">For business payments not tied to a job, like van finance, use Recurring payments on the home page.</p>
     </Sheet>
   )
 }
 
-function TodayCard() {
+function TodayCard({ limit = 8 }) {
   useVersion()
   const items = todayItems()
-  const shown = items.slice(0, 8)
+  const shown = items.slice(0, limit)
   return (
     <section className="card today2">
       <div className="card-head"><h2>Today</h2><span className="pill">{items.length ? `${items.length} thing${items.length > 1 ? 's' : ''}` : 'All clear'}</span></div>
@@ -203,6 +206,27 @@ export const mePhone = owners => localStorage.getItem('pw_me') || owners[0] || '
 
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
 
+// Live jobs four to a page, swiped left and right
+function JobPager({ jobs, onLong }) {
+  const [page, setPage] = useState(0)
+  const x = useRef(0)
+  const pages = []
+  for (let i = 0; i < jobs.length; i += 4) pages.push(jobs.slice(i, i + 4))
+  const cur = Math.min(page, Math.max(0, pages.length - 1))
+  const end = e => {
+    const dx = e.changedTouches[0].clientX - x.current
+    if (Math.abs(dx) > 40) setPage(Math.max(0, Math.min(pages.length - 1, cur + (dx < 0 ? 1 : -1))))
+  }
+  return (
+    <div className="jpager" onTouchStart={e => { x.current = e.touches[0].clientX }} onTouchEnd={end}>
+      <div className="jtrack" style={{ transform: `translateX(-${cur * 100}%)` }}>
+        {pages.map((pg, i) => <div className="jpage" key={i}>{pg.map(j => <JobCard key={j.id} job={j} onLong={onLong} />)}</div>)}
+      </div>
+      {pages.length > 1 && <div className="jdots">{pages.map((_, i) => <button key={i} className={i === cur ? 'on' : ''} aria-label={`Page ${i + 1}`} onClick={() => setPage(i)} />)}</div>}
+    </div>
+  )
+}
+
 // Everything that needs attention across every job
 export default function Home() {
   const jobs = useList('job', r => r.data.status !== 'finished', sortJobs)
@@ -241,16 +265,12 @@ export default function Home() {
         </div>
         <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${settings.owners[0]}` : ''}</div>
       </header>
+      <div className="home-today"><TodayCard /></div>
       <nav className="pbar" onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
         {PAGE_TABS.map((n, i) => <button key={n} className={'pb pb' + i + (page === i ? ' on' : '')} onClick={() => setPage(i)}>{n}</button>)}
       </nav>
       <div className="pview"><div className="pview-track" style={{ transform: `translateX(-${page * 100}%)` }}>
         <section className="pview-page">
-        <div className="hero-stats">
-          <div className="hs"><span>Owed to you</span><b className="pos">{shortMoney(owedTotal)}</b><small>{owed.length} invoice{owed.length === 1 ? '' : 's'}</small></div>
-          <div className={'hs' + (urgent ? ' hot' : '')}><span>Urgent</span><b>{urgent}</b><small>due in 2 days</small></div>
-          <div className="hs"><span>On site</span><b className="pos">{onsite.length} job{onsite.length === 1 ? '' : 's'}</b><small>{people ? `${people} ${people === 1 ? 'person' : 'people'} today` : 'nobody booked'}</small></div>
-        </div>
         <div className="quick">
           <button onClick={() => setPick('scan')}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
           <button onClick={() => setPick('add')}><span className="q-ic green"><Icon name="money" size={24} /></span>{`Paid ${mePhone(settings.owners)}`}</button>
@@ -259,7 +279,6 @@ export default function Home() {
           <button onClick={() => setPage(1)}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
         </div>
         <BackupReminder />
-        <TodayCard />
         </section>
         <section className="pview-page">
           <TodoList title="To-do" />
@@ -268,6 +287,9 @@ export default function Home() {
         <section className="pview-page">
           <MoneyCentreCard />
           <GeneralCashFlow />
+        </section>
+        <section className="pview-page">
+          <JobCalendar />
         </section>
         <section className="pview-page">
           <ContactsBox />
@@ -285,7 +307,7 @@ export default function Home() {
           ? <Empty icon="folder" title={finished.length ? 'No current jobs' : 'No jobs yet'} text="Press New job to add one. Each job has its own pages for Materials, Money and Schedule, plus Documents, Invoices and more under More at the bottom of the job." />
           : ordering
             ? <div className="reorder-list">{jobs.map((j, i) => <ReorderRow key={j.id} job={j} first={i === 0} last={i === jobs.length - 1} onMove={dir => moveJob(j.id, dir, jobs)} />)}</div>
-            : <div className="job-list">{jobs.map(j => <JobCard key={j.id} job={j} onLong={j => setEditing(j.id)} />)}</div>}
+            : <JobPager jobs={jobs} onLong={j => setEditing(j.id)} />}
         {jobs.length > 0 && <p className="hint">{ordering ? 'Use the arrows to put your most important jobs first. Tap Done when finished.' : 'Tap a job to open it. Press and hold to change its details or status. Tap Reorder to move jobs up or down. Finished jobs go into the folder below.'}</p>}
         {!ordering && <button className="finished-folder" onClick={() => nav('/finished')}>
           <span className="ff-ic"><Icon name="folder" size={26} /></span>

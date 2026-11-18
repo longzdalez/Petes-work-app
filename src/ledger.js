@@ -3,7 +3,25 @@
 // Money in can also be "set against" one of them (data.against), which decides who it counts for in who owes who.
 // Profits are split 50/50 between the two owners.
 import { list } from './store'
-import { num, today } from './util'
+import { num, today, parseYmd, ymd } from './util'
+
+// Every date a recurring payment falls on, up to and including `to`. Stops at its last payment if it has one.
+export function recurDates(d, to) {
+  if (!d.date) return []
+  const rep = d.repeat && d.repeat !== 'none' ? d.repeat : null
+  const dates = []
+  const cur = parseYmd(d.date)
+  for (let i = 0; i < 3000; i++) {
+    const s = ymd(cur)
+    if (s > to || (d.until && s > d.until)) break
+    dates.push(s)
+    if (!rep) break
+    if (rep === 'weekly') cur.setDate(cur.getDate() + 7)
+    else if (rep === 'monthly') cur.setMonth(cur.getMonth() + 1)
+    else cur.setFullYear(cur.getFullYear() + 1)
+  }
+  return dates
+}
 
 // Who paid (money out) or whose account it went into (money in). Empty = not marked yet. ('business' is from before, and counts as not marked.)
 // Car costs saved before this existed kept the payer in `person`.
@@ -26,7 +44,8 @@ export function allItems(owners) {
   list('genpay').forEach(r => {
     const d = r.data, a = num(d.amount)
     if (!a) return
-    ;(d.paid || []).filter(x => x <= t).forEach(date => out.push({ key: r.id + date, id: r.id, src: 'genpay', kind: d.dir === 'in' ? 'income' : 'expense', amount: a, date, desc: d.desc || 'Repeat payment', cat: 'repeat', payer: d.payer || '', against: d.against || '', from: '', to: '', job: null, jobName: '' }))
+    // Recurring payments count on each date they fall on, paid to or from the chosen payer
+    recurDates(d, t).forEach(date => out.push({ key: r.id + date, id: r.id, src: 'genpay', kind: d.dir === 'in' ? 'income' : 'expense', amount: a, date, desc: d.desc || 'Recurring payment', cat: 'repeat', payer: d.payer || '', against: d.against || '', from: '', to: '', job: null, jobName: '' }))
   })
   out.push(...openingItems(owners))
   return out.sort((a, b) => b.date.localeCompare(a.date))
