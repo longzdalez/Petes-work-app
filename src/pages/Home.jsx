@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { put, update, removeDeep, useList, useStatus, useVersion, cloudEnabled, list, get } from '../store'
 import { Icon, Sheet, Field, TopBar, Empty, useLongPress, confirmDelete, SwipeRow, Logo } from '../ui'
 import { ProfitRing, Glyph } from '../ui2'
@@ -17,6 +17,10 @@ import { ScopeAndValue } from './Job'
 import { GeneralCashFlow } from './CashFlow'
 import { MoneyCentreCard } from './MoneyCentre'
 import { VehicleSheet, CarIcon } from '../Vehicle'
+import '../home-pager.css'
+
+// The five home pages, switched only from the swipe bar so swiping a list never turns the page
+const PAGE_TABS = ['Today', 'To-do', 'Money', 'Contacts', 'Jobs']
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -204,6 +208,13 @@ export default function Home() {
   const jobs = useList('job', r => r.data.status !== 'finished', sortJobs)
   const allJobs = useList('job')
   const finished = allJobs.filter(j => j.data.status === 'finished')
+  const [page, setPage] = useState(0)
+  const swipeX = useRef(0)
+  const swipeStart = e => { swipeX.current = e.touches[0].clientX }
+  const swipeEnd = e => {
+    const dx = e.changedTouches[0].clientX - swipeX.current
+    if (Math.abs(dx) > 40) setPage(p => Math.max(0, Math.min(PAGE_TABS.length - 1, p + (dx < 0 ? 1 : -1))))
+  }
   const [ordering, setOrdering] = useState(false)
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
@@ -230,8 +241,11 @@ export default function Home() {
         </div>
         <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${settings.owners[0]}` : ''}</div>
       </header>
-      <div className="home-pager">
-        <section className="home-page" id="home-page-1">
+      <nav className="pbar" onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
+        {PAGE_TABS.map((n, i) => <button key={n} className={'pb pb' + i + (page === i ? ' on' : '')} onClick={() => setPage(i)}>{n}</button>)}
+      </nav>
+      <div className="pview"><div className="pview-track" style={{ transform: `translateX(-${page * 100}%)` }}>
+        <section className="pview-page">
         <div className="hero-stats">
           <div className="hs"><span>Owed to you</span><b className="pos">{shortMoney(owedTotal)}</b><small>{owed.length} invoice{owed.length === 1 ? '' : 's'}</small></div>
           <div className={'hs' + (urgent ? ' hot' : '')}><span>Urgent</span><b>{urgent}</b><small>due in 2 days</small></div>
@@ -242,23 +256,23 @@ export default function Home() {
           <button onClick={() => setPick('add')}><span className="q-ic green"><Icon name="money" size={24} /></span>{`Paid ${mePhone(settings.owners)}`}</button>
           <button onClick={() => setCar(true)} aria-label="Vehicle costs: ULEZ, congestion, fuel, tickets"><span className="q-ic white"><CarIcon /></span></button>
           <button onClick={() => setAdding(true)}><span className="q-ic white"><Icon name="plus" size={24} /></span>New job</button>
-          <button onClick={() => document.getElementById('home-page-2')?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
+          <button onClick={() => setPage(1)}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
         </div>
         <BackupReminder />
         <TodayCard />
         </section>
-        <section className="home-page" id="home-page-2">
+        <section className="pview-page">
           <TodoList title="To-do" />
           <TodoList title="To Get" kind="toget" showCalendar={false} />
-          <MoneyCentreCard />
         </section>
-        <section className="home-page">
+        <section className="pview-page">
+          <MoneyCentreCard />
           <GeneralCashFlow />
         </section>
-        <section className="home-page">
+        <section className="pview-page">
           <ContactsBox />
         </section>
-        <section className="home-page">
+        <section className="pview-page">
         <main className="content home-content home-jobs-page">
         <div className="section-head">
           <h2>Jobs</h2>
@@ -281,7 +295,7 @@ export default function Home() {
         </button>}
         </main>
         </section>
-        </div>
+      </div></div>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
       <NewJobSheet open={adding} onClose={() => setAdding(false)} />
       <JobPickSheet action={pick} onClose={() => setPick(null)} />
