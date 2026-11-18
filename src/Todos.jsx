@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { put, update, remove, useList } from './store'
+import { put, update, remove, removeWithUndo, useList } from './store'
 import { Icon, Sheet, Field, SwipeRow, MonthCalendar, useLongPress, UrgencyPicker } from './ui'
 import { niceDate, today, shortDate, URGENCY, ymd, parseYmd } from './util'
 import { remindersOn, enableReminders, canNotify, nowLocal, niceRemind } from './reminders'
@@ -95,7 +95,7 @@ function TodoRow({ td, onEdit }) {
   const u = URGENCY[d.urgency]
   const when = d.date && d.date !== t ? (d.date < t ? `from ${shortDate(d.date)}` : shortDate(d.date)) : ''
   return (
-    <SwipeRow className={d.done ? 'done' : ''} onTick={toggle} onDelete={() => remove(td.id)}>
+    <SwipeRow className={d.done ? 'done' : ''} onTick={toggle} onDelete={() => removeWithUndo(td.id, 'To-do')}>
       <button className={'tick' + (d.done ? ' on' : '')} onClick={toggle} aria-label="Tick">{d.done && <Icon name="check" size={16} stroke={3} />}</button>
       <span className="text todo-text" {...lp}>
         {d.text}
@@ -112,9 +112,11 @@ function TodoRow({ td, onEdit }) {
   )
 }
 
-export function TodoList({ jobId, title = 'To-do', showCalendar = true }) {
+export function TodoList({ jobId, title = 'To-do', showCalendar = true, kind = 'todo' }) {
   const t = today()
-  const all = useList('todo', belongs(jobId), sortTodos)
+  const all = useList(kind, belongs(jobId), sortTodos)
+  const jobsList = useList('job', r => r.data.status !== 'finished', (a, b) => (a.data.name || '').localeCompare(b.data.name || ''))
+  const [forJob, setForJob] = useState('')
   const shown = all.filter(r => !r.data.done || r.data.doneOn === t)
   const [text, setText] = useState('')
   const [date, setDate] = useState(t)
@@ -122,7 +124,7 @@ export function TodoList({ jobId, title = 'To-do', showCalendar = true }) {
   const [big, setBig] = useState(false)
   const [day, setDay] = useState(null)
   const [month, setMonth] = useState(() => { const d = new Date(); return [d.getFullYear(), d.getMonth()] })
-  const add = (txt = text, dt = date) => { if (!txt.trim()) return; put('todo', { text: txt.trim(), date: dt || t, done: false }, { job_id: jobId || null }); setText('') }
+  const add = (txt = text, dt = date) => { if (!txt.trim()) return; put(kind, { text: txt.trim(), date: dt || t, done: false }, { job_id: jobId || forJob || null }); setText('') }
   const items = all.map(r => ({ date: r.data.date, text: r.data.text + (r.data.time ? ' ' + r.data.time : ''), color: URGENCY[r.data.urgency]?.color || TODO_COLOUR, done: r.data.done }))
   const editTodo = all.find(r => r.id === edit)
   const open = shown.filter(x => !x.data.done).length
@@ -142,6 +144,10 @@ export function TodoList({ jobId, title = 'To-do', showCalendar = true }) {
         <input type="date" value={date} onChange={e => setDate(e.target.value)} />
         {date !== t && <button className="btn ghost small" onClick={() => setDate(t)}>Today</button>}
       </div>
+      {!jobId && <div className="todo-date-row">
+        <span className="small muted">Job</span>
+        <select value={forJob} onChange={e => setForJob(e.target.value)} aria-label="Assign to a job"><option value="">General (no job)</option>{jobsList.map(j => <option key={j.id} value={j.id}>{j.data.name || 'Untitled job'}</option>)}</select>
+      </div>}
       {shown.length > 0 && <p className="hint" style={{ margin: '10px 0 0' }}>Hold a to-do to change it, or tap the pencil. Tap the bell to set a reminder. Swipe right to tick, left to delete.</p>}
       {showCalendar && <button className="btn ghost wide" style={{ marginTop: 12 }} onClick={() => setBig(true)}><Icon name="schedule" size={18} /> Open to-do calendar</button>}
       <Sheet open={big} onClose={() => setBig(false)} title={`${title} calendar`} full>
