@@ -20,7 +20,7 @@ export const MORE = [
   { key: 'docs', label: 'Documents', icon: 'docs' },
   { key: 'invoices', label: 'Invoices & quotes', icon: 'invoice' },
   { key: 'extras', label: 'Extras', icon: 'extra' },
-  { key: 'photos', label: 'Photo diary', icon: 'camera' },
+  { key: 'photos', label: 'Photo', icon: 'camera' },
   { key: 'snags', label: 'Snagging', icon: 'snag' },
   { key: 'hours', label: 'Hours', icon: 'clock' },
   { key: 'todos', label: 'To-do', icon: 'check' },
@@ -83,11 +83,11 @@ function ProBox({ job, pro }) {
   )
 }
 
-function HubTile({ icon, label, onClick, badge, orange }) {
+function HubTile({ icon, label, onClick, badge, color }) {
   return (
-    <button className={'hub-tile' + (orange ? ' orange' : '')} onClick={onClick}>
+    <button className="hub-tile" onClick={onClick}>
       {badge ? <span className="hub-badge">{badge}</span> : null}
-      <span className="hub-ic"><Icon name={icon} size={22} /></span>
+      <span className="hub-ic" style={color ? { background: color, color: '#fff' } : undefined}><Icon name={icon} size={22} /></span>
       {label}
     </button>
   )
@@ -207,6 +207,8 @@ export default function JobInfo({ id }) {
   )
   return (
     <JobShell job={job} tab="" hero={hero}>
+      <div className="home-pager">
+      <section className="home-page">
       <section className="card money-glance">
         <div className="mg-top">
           {m.quote > 0 ? <ProfitRing pct={m.left} size={86} sub="profit left" /> : <div className="mg-noquote">Add the job value in Scope of works to see the profit ring</div>}
@@ -238,18 +240,19 @@ export default function JobInfo({ id }) {
       <div className="small muted status-help">{{ quoting: "You're still pricing this job up.", booked: 'The job is agreed and booked in.', onsite: "You're working on this job now.", finished: 'Done. It moves to the Finished list on the home page.' }[st]}</div>
 
       <div className="hub">
-        <HubTile icon="extra" label="Extras" badge={extras.length} orange onClick={() => go('extras')} />
-        <HubTile icon="camera" label="Photo diary" badge={0} onClick={() => go('photos')} />
-        <HubTile icon="check" label="To-do" badge={todos.length} onClick={() => go('todos')} />
-        <HubTile icon="clock" label="Hours" onClick={() => go('hours')} />
-        <HubTile icon="snag" label="Snagging" badge={snags.length} onClick={() => go('snags')} />
-        <HubTile icon="copy" label="Save as template" onClick={() => setTpl(true)} />
+        <HubTile icon="materials" label="Materials" color="#4a90d9" onClick={() => go('materials')} />
+        <HubTile icon="money" label="Money" color="#2fb8a6" onClick={() => go('money')} />
+        <HubTile icon="schedule" label="Schedule" color="#e8a33d" onClick={() => go('schedule')} />
+        <HubTile icon="camera" label="Photo" color="#9b7bff" onClick={() => go('photos')} />
+        <HubTile icon="extra" label="Extras" color="#ff7a45" badge={extras.length} onClick={() => go('extras')} />
+        <HubTile icon="check" label="To-do" color="#3fbf7f" badge={todos.length} onClick={() => go('todos')} />
       </div>
+      <button className="link-btn" style={{ margin: '0 0 12px' }} onClick={() => setTpl(true)}>Save as template</button>
       {photos.length > 0 && <p className="hint" style={{ marginTop: -4 }}>{photos.length} progress photo{photos.length > 1 ? 's' : ''} in the diary</p>}
 
       <WeekOnSite id={id} />
-      <ScopeAndValue job={job} />
-
+      </section>
+      <section className="home-page">
       <section className="card">
         <div className="card-head"><h2>Client</h2><span className="muted small">Job created {niceDate(d.created)}</span></div>
         {(d.clientPhone || d.clientEmail || d.address) && <div className="contact-row">
@@ -271,6 +274,11 @@ export default function JobInfo({ id }) {
         </div>
         {d.cover && <button className="btn ghost small" onClick={() => set({ cover: '' })}>Remove cover photo</button>}
       </section>
+      </section>
+      <section className="home-page">
+      <ScopeAndValue job={job} />
+      </section>
+      <section className="home-page">
       <section className="card">
         <div className="card-head"><h2>Professional services</h2></div>
         {PROS.map(p => <ProBox key={p.key} job={job} pro={p} />)}
@@ -279,6 +287,8 @@ export default function JobInfo({ id }) {
         <div className="card-head"><h2>Notes</h2></div>
         <Field label="Anything else about this job" value={d.notes} onChange={v => set({ notes: v })} multiline />
       </section>
+      </section>
+      </div>
       <PromptSheet open={tpl} onClose={() => setTpl(false)} title="Save as a template" label="Template name" initial={d.name ? d.name + ' template' : ''}
         placeholder="e.g. Kitchen fit" saveLabel="Save template" onSave={n => { saveTemplate(id, n || 'Template'); alert('Template saved. Pick it next time you make a new job.') }}>
         <p className="small muted">This remembers this job's material folders and items, and the schedule, so your next similar job starts filled in.</p>
