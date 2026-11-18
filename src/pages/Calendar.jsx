@@ -15,22 +15,45 @@ export function jobsOn(jobs, day) {
   })
 }
 
+// What a job shows on one day: its own details, unless that day has been edited on the calendar.
+// Day edits live in job.data.calDays[day] and never change the job's start or finish dates.
+export function dayView(job, day) {
+  const d = job.data, o = d.calDays?.[day] || {}
+  return {
+    name: o.name ?? d.name ?? '',
+    client: o.client ?? d.client ?? '',
+    address: o.address ?? d.address ?? '',
+    edited: !!d.calDays?.[day],
+  }
+}
+const labelOf = v => v.client || v.name || 'Untitled job'
+
+function setDayEdit(job, day, patch) {
+  const cur = job.data.calDays || {}
+  update(job.id, { calDays: { ...cur, [day]: { ...(cur[day] || {}), ...patch } } })
+}
+
+// Put a single day back to the job's own details
+function resetDay(job, day) {
+  const rest = { ...(job.data.calDays || {}) }
+  delete rest[day]
+  update(job.id, { calDays: rest })
+}
+
 const WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-// Edit a job's name, client, address and dates from the calendar
-function CalJobEditor({ job, onClose }) {
-  const d = job.data
-  const set = patch => update(job.id, patch)
+// Edit one day's entry for a job. Only that day changes; the job's dates stay as they are.
+function DayJobEditor({ job, day, onClose }) {
+  const v = dayView(job, day)
+  const set = patch => setDayEdit(job, day, patch)
   return (
-    <Sheet open onClose={onClose} title="Edit job">
-      <Field label="Job name" value={d.name} onChange={v => set({ name: v })} />
-      <Field label="Client name" value={d.client} onChange={v => set({ client: v })} />
-      <Field label="Address" value={d.address} onChange={v => set({ address: v })} multiline />
-      <div className="two">
-        <Field label="Start date" type="date" value={d.start} onChange={v => set({ start: v })} />
-        <Field label="Finish date" type="date" value={d.finish} onChange={v => set({ finish: v })} />
-      </div>
+    <Sheet open onClose={onClose} title={`Edit on ${niceDate(day)}`}>
+      <p className="small muted" style={{ marginTop: 0 }}>Changes here only apply to this day. The job's own details and start and finish dates don't change.</p>
+      <Field label="Job name" value={v.name} onChange={x => set({ name: x })} />
+      <Field label="Client name" value={v.client} onChange={x => set({ client: x })} />
+      <Field label="Address" value={v.address} onChange={x => set({ address: x })} multiline />
       <div className="sheet-actions">
+        {v.edited && <button className="btn ghost" onClick={() => resetDay(job, day)}>Use job details</button>}
         <button className="btn primary" onClick={onClose}>Done</button>
       </div>
     </Sheet>
@@ -74,7 +97,7 @@ export function JobCalendar() {
         {cells.map((c, i) => c
           ? <button key={c} className={'cal-day' + (c === t ? ' today' : '')} onClick={() => setDay(c)}>
             <span className="cal-num">{+c.slice(8)}</span>
-            {jobsOn(jobs, c).map(j => <span key={j.id} className="cal-job">{j.data.client || j.data.name || 'Untitled job'}</span>)}
+            {jobsOn(jobs, c).map(j => <span key={j.id} className="cal-job">{labelOf(dayView(j, c))}</span>)}
           </button>
           : <span key={'blank' + i} className="cal-blank" />)}
       </div>
@@ -82,24 +105,27 @@ export function JobCalendar() {
       {day && !editJob && <Sheet open onClose={() => setDay(null)} title={`Booked on ${niceDate(day)}`}>
         {dayJobs.length === 0 && <p className="muted">No live jobs booked on this day.</p>}
         <div className="pick-list">
-          {dayJobs.map(j => (
-            <div key={j.id} className="cal-job-row">
-              <div className="text"><b>{j.data.client || j.data.name || 'Untitled job'}</b>
-                <span>{j.data.name && j.data.client ? `${j.data.name} · ` : ''}{j.data.address?.split('\n')[0] || 'No address yet'}</span>
-                <span>{shortDate(j.data.start)}{j.data.finish ? ` to ${shortDate(j.data.finish)}` : ''}</span></div>
-              <div className="cal-job-acts">
-                <button className="btn ghost small" onClick={() => setEditing(j.id)}><Icon name="edit" size={16} /> Edit</button>
-                <button className="btn ghost small" onClick={() => { setDay(null); nav(`/job/${j.id}`) }}>Open</button>
-                <button className="btn danger small" aria-label={`Remove ${j.data.client || j.data.name || 'job'}`} onClick={() => { if (confirmDelete('this job and everything in it')) removeDeep(j.id) }}><Icon name="trash" size={16} /></button>
+          {dayJobs.map(j => {
+            const v = dayView(j, day)
+            return (
+              <div key={j.id} className="cal-job-row">
+                <div className="text"><b>{labelOf(v)}{v.edited && <em className="urgent-tag" style={{ background: 'var(--line)', color: 'var(--muted)' }}>Edited</em>}</b>
+                  <span>{v.name && v.client ? `${v.name} · ` : ''}{v.address?.split('\n')[0] || 'No address yet'}</span>
+                  <span>{shortDate(j.data.start)}{j.data.finish ? ` to ${shortDate(j.data.finish)}` : ''}</span></div>
+                <div className="cal-job-acts">
+                  <button className="btn ghost small" onClick={() => setEditing(j.id)}><Icon name="edit" size={16} /> Edit</button>
+                  <button className="btn ghost small" onClick={() => { setDay(null); nav(`/job/${j.id}`) }}>Open</button>
+                  <button className="btn danger small" aria-label={`Remove ${labelOf(v)}`} onClick={() => { if (confirmDelete('this job and everything in it')) removeDeep(j.id) }}><Icon name="trash" size={16} /></button>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
         <div className="sheet-actions">
           <button className="btn primary" onClick={addHere}><Icon name="plus" size={18} /> Add a job on this day</button>
         </div>
       </Sheet>}
-      {editJob && <CalJobEditor job={editJob} onClose={() => setEditing(null)} />}
+      {editJob && day && <DayJobEditor job={editJob} day={day} onClose={() => setEditing(null)} />}
     </section>
   )
 }
