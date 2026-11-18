@@ -7,6 +7,7 @@
 .cal-job-row .text span { font-size: 13px; color: var(--muted); }
 .cal-job-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .cal-job-acts .btn { flex: 1 1 auto; }
+.cal-tag { font-style: normal; font-size: 10px; font-weight: 800; margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: var(--line); color: var(--muted); }
 .pbar { overflow-x: auto; scrollbar-width: none; }
 .pbar::-webkit-scrollbar { display: none; }
 .pbar .pb { font-size: 11px; padding: 8px 0; }
