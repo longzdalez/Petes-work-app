@@ -47,7 +47,7 @@ self.addEventListener('fetch', e => {
   }
 });
 
-// Background check for reminders (Android Chrome, installed app)
+// Daily background check for urgent reminders (Android Chrome, installed app)
 function readDue() {
   return new Promise(res => {
     const q = indexedDB.open('pete-reminders', 1)

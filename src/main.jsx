@@ -23,7 +23,7 @@ import MoneyCentre from './pages/MoneyCentre'
 import Help from './pages/Help'
 import Share from './pages/Share'
 import VoiceButton from './Voice'
-import { Logo } from './ui'
+import { Logo, UndoBar } from './ui'
 import { startReminders } from './reminders'
 
 function App() {
@@ -68,6 +68,7 @@ function App() {
   else page = <Home />
   return <>
     {page}
+    <UndoBar />
     {!['settings', 'share', 'search'].includes(r[0]) && <VoiceButton ctx={{ page: jobId ? (r[2] || 'job') : 'home', jobId, folderId: r[2] === 'folder' ? r[3] : null }} />}
   </>
 }
