@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DAYS, MONTHS, URGENCY, monthGrid, today, ymd, vibrate } from './util'
+import { useUndo, undoDelete } from './store'
 
 const PATHS = {
   back: 'M15 18l-6-6 6-6',
@@ -40,7 +41,7 @@ const PATHS = {
   shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
   mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6',
   sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
-  receipt: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1zM8 8h8M8 12h8M8 16h5',
+  receipt: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1zM8 8h8M8 12h8M8 16h5',
 }
 export function Icon({ name, size = 22, stroke = 2, style }) {
   return (
@@ -304,6 +305,12 @@ export function Suggest({ id, values }) {
 }
 
 export function Toast({ text }) { return text ? <div className="toast">{text}</div> : null }
+// Shows after a swipe-delete for 3 seconds, with Undo
+export function UndoBar() {
+  const u = useUndo()
+  if (!u) return null
+  return <div className="undo-bar" role="status"><span>{u.label} deleted</span><button onClick={undoDelete}>Undo</button></div>
+}
 
 // BP Builders logo: a roof over the letters, in the app's greens with an orange chimney
 export function Logo({ big }) {
