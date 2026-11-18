@@ -306,7 +306,8 @@ function TallyTab({ items, t, owners, settings, setAdd, setFilter, setTab }) {
 function StartingPoint({ owners }) {
   const [open, setOpen] = useState(false)
   const o = openingOf()
-  const sum = k => owners.reduce((s, n) => s + num(o?.[k]?.[n]), 0)
+  const ent = k => (o?.entries || []).filter(e => e.kind === k).reduce((s, e) => s + num(e.amount), 0)
+  const sum = k => owners.reduce((s, n) => s + num(o?.[k]?.[n]), 0) + ent(k)
   const out = sum('materials') + sum('wages') + sum('other')
   return (
     <section className="card mc-start">
@@ -331,15 +332,20 @@ function StartingPointSheet({ owners, onClose }) {
   const [d, setD] = useState(() => {
     const v = { date: o.date || today(), owed: { by: o.owed?.by || '', to: o.owed?.to || '', amount: o.owed?.amount ? String(o.owed.amount) : '' }, between: Object.fromEntries(owners.map(n => [n, o.between?.[n] ? String(o.between[n]) : ''])) }
     OPENING_ROWS.forEach(r => { v[r.k] = Object.fromEntries(owners.map(n => [n, o[r.k]?.[n] ? String(o[r.k][n]) : ''])) })
+    v.entries = (o.entries || []).map(e => ({ ...e, amount: e.amount ? String(e.amount) : '' }))
     return v
   })
   const setCell = (k, n, val) => setD(x => ({ ...x, [k]: { ...x[k], [n]: val } }))
   const setOwed = p => setD(x => ({ ...x, owed: { ...x.owed, ...p } }))
+  const addEntry = () => setD(x => ({ ...x, entries: [...x.entries, { id: Date.now() + Math.random(), kind: 'materials', payer: owners[0] || '', amount: '', desc: '' }] }))
+  const setEntry = (id, p) => setD(x => ({ ...x, entries: x.entries.map(e => e.id === id ? { ...e, ...p } : e) }))
+  const delEntry = id => setD(x => ({ ...x, entries: x.entries.filter(e => e.id !== id) }))
   const other = n => owners.find(x => x !== n) || ''
   const save = () => {
     if (num(d.owed.amount) > 0 && !d.owed.by) return alert('Tap who owed the money')
     const v = { date: d.date || today(), owed: num(d.owed.amount) > 0 ? { by: d.owed.by, to: d.owed.to, amount: num(d.owed.amount) } : null, between: Object.fromEntries(owners.map(n => [n, num(d.between[n])])) }
     OPENING_ROWS.forEach(r => { v[r.k] = Object.fromEntries(owners.map(n => [n, num(d[r.k][n])])) })
+    v.entries = d.entries.filter(e => num(e.amount) > 0).map(e => ({ id: e.id, kind: e.kind, payer: e.payer, desc: (e.desc || '').trim(), amount: num(e.amount) }))
     setS({ opening: v }); onClose()
   }
   const clear = () => { if (confirm('Remove the starting point? The tally will then only count payments in the app.')) { setS({ opening: null }); onClose() } }
@@ -361,6 +367,22 @@ function StartingPointSheet({ owners, onClose }) {
       <h3 className="sub-h">Paid between you</h3>
       <p className="small muted" style={{ marginTop: 0 }}>Money already sent from one of your accounts to the other. Leave empty if none.</p>
       {owners.map(n => <label key={n} className="field"><span>{n} paid {other(n)} (£)</span><input inputMode="decimal" placeholder="0.00" value={d.between[n]} onChange={e => setD(x => ({ ...x, between: { ...x.between, [n]: e.target.value } }))} /></label>)}
+      <h3 className="sub-h">Individual payments</h3>
+      <p className="small muted" style={{ marginTop: 0 }}>Add each payment on its own: money in, or money out for materials, wages or other costs. Add as many as you need.</p>
+      {d.entries.map(e => (
+        <div key={e.id} className="ent-row">
+          <div className="seg small" style={{ gridTemplateColumns: 'repeat(4, 1fr)', margin: 0 }}>
+            {[['in', 'Money in'], ['materials', 'Materials'], ['wages', 'Wages'], ['other', 'Other']].map(([k, l]) => <button key={k} className={e.kind === k ? 'on' : ''} onClick={() => setEntry(e.id, { kind: k })}>{l}</button>)}
+          </div>
+          <label className="field"><span>{e.kind === 'in' ? 'Whose account it went into' : 'Who paid it'}</span><PayerToggle value={e.payer} onChange={p => setEntry(e.id, { payer: p })} /></label>
+          <div className="two">
+            <label className="field"><span>{e.kind === 'in' ? 'Money in (£)' : 'Money out (£)'}</span><input inputMode="decimal" placeholder="0.00" value={e.amount} onChange={ev => setEntry(e.id, { amount: ev.target.value })} /></label>
+            <label className="field"><span>What for</span><input value={e.desc || ''} onChange={ev => setEntry(e.id, { desc: ev.target.value })} placeholder="optional" /></label>
+          </div>
+          <button className="btn ghost small" onClick={() => delEntry(e.id)}><Icon name="trash" size={16} /> Remove this payment</button>
+        </div>
+      ))}
+      <button className="btn ghost wide" onClick={addEntry}><Icon name="plus" size={18} /> Add a payment</button>
       <div className="sheet-actions">
         {openingOf() && <button className="btn danger" onClick={clear}><Icon name="trash" size={18} /></button>}
         <button className="btn primary" onClick={save}>Save</button>
