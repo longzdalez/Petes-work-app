@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { jsPDF } from 'jspdf'
-import { put, update, remove, useRecord, useList, deleteFile } from '../store'
+import { put, update, remove, removeWithUndo, useRecord, useList, deleteFile } from '../store'
 import { Icon, Sheet, Field, Empty, SwipeRow, SignaturePad } from '../ui'
 import { JobShell } from './Job'
 import { nav } from '../router'
@@ -78,7 +78,7 @@ export default function Snags({ id }) {
           <div className="card-head"><h2>{open ? `${open} to fix` : 'All fixed'}</h2><span className="pill">{snags.length} total</span></div>
           <div className="checklist">
             {snags.map(s => (
-              <SwipeRow key={s.id} onTick={() => update(s.id, { done: !s.data.done })} onDelete={() => remove(s.id)} className={s.data.done ? 'done' : ''}>
+              <SwipeRow key={s.id} onTick={() => update(s.id, { done: !s.data.done })} onDelete={() => removeWithUndo(s.id, s.data.text || 'Snag')} className={s.data.done ? 'done' : ''}>
                 <button className={'tick' + (s.data.done ? ' on' : '')} onClick={() => update(s.id, { done: !s.data.done })} aria-label="Fixed">{s.data.done && <Icon name="check" size={16} stroke={3} />}</button>
                 <span className="text" onClick={() => setEdit(s)}>{s.data.text}{s.data.location && <span className="muted small"> · {s.data.location}</span>}</span>
                 {s.data.thumb && <img className="thumb-sm" src={s.data.thumb} alt="" onClick={() => setEdit(s)} />}
