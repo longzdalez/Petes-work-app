@@ -1,4 +1,4 @@
-// Repeat payments (was General cash flow): business payments that aren't tied to one job (van, insurance, phone, loan…), one-off or repeating
+// Recurring payments (was Repeat payments): business payments that aren't tied to one job (van, insurance, phone, loan…), one-off or repeating
 import { useState } from 'react'
 import { put, update, remove, useList } from '../store'
 import { Icon, Sheet, Field, TopBar, Empty, confirmDelete } from '../ui'
@@ -12,20 +12,19 @@ const repeatLabel = k => REPEAT.find(r => r.k === k)?.l || 'One-off'
 const step = (d, rep) => { const x = new Date(d); if (rep === 'weekly') x.setDate(x.getDate() + 7); else if (rep === 'monthly') x.setMonth(x.getMonth() + 1); else x.setFullYear(x.getFullYear() + 1); return x }
 const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d) }
 
-// Every date a payment falls on between two dates (inclusive), with whether it's been ticked off
+// Every date a payment falls on between two dates (inclusive). `paid` means the date has already come round.
 export function occurrences(rec, from, to) {
-  const d = rec.data, out = []
+  const d = rec.data, out = [], t = today()
   if (!d.date) return out
-  const paid = d.paid || []
   if (!d.repeat || d.repeat === 'none') {
-    if (d.date >= from && d.date <= to) out.push({ rec, date: d.date, paid: paid.includes(d.date) })
+    if (d.date >= from && d.date <= to) out.push({ rec, date: d.date, paid: d.date <= t })
     return out
   }
   let cur = parseYmd(d.date)
   for (let i = 0; i < 600 && ymd(cur) <= to; i++) {
     const s = ymd(cur)
     if (d.until && s > d.until) break
-    if (s >= from) out.push({ rec, date: s, paid: paid.includes(s) })
+    if (s >= from) out.push({ rec, date: s, paid: s <= t })
     cur = step(cur, d.repeat)
   }
   return out
@@ -69,17 +68,11 @@ function PaySheet({ entry, onClose }) {
 
 function OccRow({ o, onEdit }) {
   const d = o.rec.data
-  const late = !o.paid && o.date < today()
-  const tick = () => {
-    if (isLocked(o.date)) return alert(lockMsg(o.date))
-    const paid = d.paid || []
-    update(o.rec.id, { paid: o.paid ? paid.filter(x => x !== o.date) : [...paid, o.date] })
-  }
   return (
-    <div className={'up-row' + (o.paid ? ' done' : '')}>
-      <button className={'tick' + (o.paid ? ' on' : '')} onClick={tick} aria-label={o.paid ? 'Not paid' : 'Mark paid'}>{o.paid && <Icon name="check" size={16} stroke={3} />}</button>
+    <div className="up-row">
+      <span className="rec-date">{shortDate(o.date)}</span>
       <span className="text tap" onClick={() => onEdit(o.rec)}>{d.desc}<br />
-        <span className={'small ' + (late ? 'neg' : 'muted')}>{late ? 'Was due ' : ''}{shortDate(o.date)}{d.repeat && d.repeat !== 'none' ? ` · ${repeatLabel(d.repeat).toLowerCase()}` : ''}</span></span>
+        <span className="small muted">{repeatLabel(d.repeat || 'none')}{d.until ? ` until ${shortDate(d.until)}` : ''}</span></span>
       <PayerToggle value={d.payer || ''} onChange={p => update(o.rec.id, { payer: p })} />
       <span className={'nowrap ' + (d.dir === 'in' ? 'pos' : 'neg')}>{d.dir === 'in' ? '+' : '−'}{money(d.amount)}</span>
     </div>
@@ -89,7 +82,7 @@ function OccRow({ o, onEdit }) {
 const upcomingOcc = (pays, days) => {
   const t = today(), from = addDays(t, -60), to = addDays(t, days)
   // Missed payments only count from when the payment was added, so an old start date doesn't flag months gone by
-  return pays.flatMap(p => { const c = (p.data.created || '').slice(0, 10); return occurrences(p, c > from ? c : from, to) }).filter(o => !o.paid || o.date >= t).sort((a, b) => a.date.localeCompare(b.date))
+  return pays.flatMap(p => { const c = (p.data.created || '').slice(0, 10); return occurrences(p, c > from ? c : from, to) }).filter(o => o.date >= t).sort((a, b) => a.date.localeCompare(b.date))
 }
 
 // The box on the home page
@@ -101,8 +94,8 @@ export function GeneralCashFlow() {
   const inn = next.filter(o => !o.paid && o.rec.data.dir === 'in').reduce((s, o) => s + num(o.rec.data.amount), 0)
   return (
     <section className="card">
-      <div className="card-head"><h2>Repeat payments</h2><button className="btn primary small" onClick={() => setEdit({ data: {} })}><Icon name="plus" size={16} /> Add</button></div>
-      {pays.length === 0 ? <p className="muted small" style={{ marginTop: 0 }}>Business payments that aren't for one job, like van finance, insurance or your phone. Add one-off payments or ones that repeat every week, month or year, and tick them off when they're paid.</p> : <>
+      <div className="card-head"><h2>Recurring payments</h2><button className="btn primary small" onClick={() => setEdit({ data: {} })}><Icon name="plus" size={16} /> Add</button></div>
+      {pays.length === 0 ? <p className="muted small" style={{ marginTop: 0 }}>Business payments that aren't for one job, like van finance, insurance or your phone. Add one-off payments or ones that repeat every week, month or year. Each one counts in the Money centre on the date it's due, paid by whoever you chose.</p> : <>
         <div className="cf-sum">
           <div><span>Going out, next 30 days</span><b className="neg">{money(out)}</b></div>
           {inn > 0 && <div><span>Coming in</span><b className="pos">{money(inn)}</b></div>}
@@ -127,7 +120,7 @@ export default function CashFlowPage() {
     .reduce((s, p) => s + (p.data.dir === 'in' ? -1 : 1) * num(p.data.amount) * ({ weekly: 52 / 12, monthly: 1, yearly: 1 / 12 }[p.data.repeat] || 0), 0)
   return (
     <div className="page">
-      <TopBar title="Repeat payments" sub="Payments not tied to a job" onBack={() => back('/')} />
+      <TopBar title="Recurring payments" sub="Payments not tied to a job" onBack={() => back('/')} />
       <main className="content">
         <button className="btn orange wide big" onClick={() => setEdit({ data: {} })}><Icon name="plus" size={20} /> Add a payment</button>
         {pays.length === 0 && <Empty icon="money" title="No payments yet" text="Add things like van finance, insurance, phone or loan payments. Set them to repeat and they'll show up each time they're due." />}
