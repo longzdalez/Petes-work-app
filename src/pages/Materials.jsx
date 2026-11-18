@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
-import { put, update, remove, removeDeep, useRecord, useList, list } from '../store'
+import { put, update, remove, removeDeep, removeWithUndo, useRecord, useList, list } from '../store'
 import { Icon, Sheet, Field, Empty, useLongPress, MonthCalendar, UrgencyPicker, UrgencyDot, confirmDelete, PromptSheet, SwipeRow, Suggest } from '../ui'
 import { whatsApp, shareText } from '../files'
 import { money, num } from '../util'
@@ -144,7 +144,7 @@ function MaterialRow({ m, autoFocus, onEnter }) {
   const sub = [m.data.qty && `x ${m.data.qty}`, m.data.supplier, num(m.data.price) ? money(num(m.data.price)) : ''].filter(Boolean).join(' · ')
   const tick = () => update(m.id, { done: !m.data.done, doneOn: !m.data.done ? new Date().toISOString().slice(0, 10) : '' })
   return (
-    <SwipeRow onTick={tick} onDelete={() => remove(m.id)}>
+    <SwipeRow onTick={tick} onDelete={() => removeWithUndo(m.id, m.data.name || 'Material')}>
       <div className={'mat-row' + (m.data.done ? ' done' : '')} style={{ width: '100%' }}>
         <button className={'tick' + (m.data.done ? ' on' : '')} onClick={tick} aria-label="Tick off">
           {m.data.done && <Icon name="check" size={16} stroke={3} />}
