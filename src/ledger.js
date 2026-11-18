@@ -33,7 +33,7 @@ export function allItems(owners) {
 }
 
 // The starting point: lump sums for everything before you started using the app (Settings record, data.opening).
-// opening = { date, in: { name: £ }, materials: { name: £ }, wages: { name: £ }, other: { name: £ }, owed: { by, to, amount }, between: { name: £ paid to the other } }
+// opening = { date, in: { name: £ }, materials: { name: £ }, wages: { name: £ }, other: { name: £ }, owed: { by, to, amount }, between: { name: £ paid to the other }, entries: [{ id, kind, payer, desc, amount }] }
 export const OPENING_ROWS = [
   { k: 'in', l: 'Money in', kind: 'income', cat: 'other', hint: 'set against each of you' },
   { k: 'materials', l: 'Materials paid out', kind: 'expense', cat: 'materials', hint: 'paid by each of you' },
@@ -50,6 +50,14 @@ export function openingItems(owners) {
     const a = num(o[r.k]?.[n])
     if (a > 0) out.push({ ...base, key: `opening-${r.k}-${n}`, kind: r.kind, cat: r.cat, amount: a, desc: `Starting point: ${r.l.toLowerCase()}`, payer: n, against: r.kind === 'income' ? n : '' })
   }))
+  // Individual payments added one at a time in the Starting point (o.entries): as many as needed
+  ;(o.entries || []).forEach((e, i) => {
+    const a = num(e.amount)
+    if (!a) return
+    const row = OPENING_ROWS.find(r => r.k === e.kind) || OPENING_ROWS[0]
+    const payer = owners.includes(e.payer) ? e.payer : owners[0]
+    out.push({ ...base, key: `opening-entry-${i}`, kind: row.kind, cat: row.cat, amount: a, desc: e.desc || `Starting point: ${row.l.toLowerCase()}`, payer, against: row.kind === 'income' ? payer : '' })
+  })
   // "Brian owes Pete £200" works like Pete having lent Brian £200
   const ow = o.owed || {}
   if (num(ow.amount) > 0 && owners.includes(ow.by) && owners.includes(ow.to) && ow.by !== ow.to)
