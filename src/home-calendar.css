@@ -2,6 +2,11 @@
 .home-today { padding: 0 10px; }
 .home-today .today2 { margin-bottom: 0; padding: 12px 14px; }
 .home-today .t-row { padding: 6px 0; }
+.cal-job-row { display: flex; flex-direction: column; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.cal-job-row .text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cal-job-row .text span { font-size: 13px; color: var(--muted); }
+.cal-job-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.cal-job-acts .btn { flex: 1 1 auto; }
 .pbar { overflow-x: auto; scrollbar-width: none; }
 .pbar::-webkit-scrollbar { display: none; }
 .pbar .pb { font-size: 11px; padding: 8px 0; }
