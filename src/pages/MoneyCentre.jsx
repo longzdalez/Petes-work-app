@@ -309,6 +309,12 @@ function StartingPoint({ owners }) {
   const ent = k => (o?.entries || []).filter(e => e.kind === k).reduce((s, e) => s + num(e.amount), 0)
   const sum = k => owners.reduce((s, n) => s + num(o?.[k]?.[n]), 0) + ent(k)
   const out = sum('materials') + sum('wages') + sum('other')
+  // Individual lines in date order, with the running balance after each one (in minus out)
+  let run = 0
+  const lines = o ? [...(o.entries || [])].filter(e => num(e.amount) > 0)
+    .sort((a, b) => (a.date || o.date || '').localeCompare(b.date || o.date || ''))
+    .map(e => { run += e.kind === 'in' ? num(e.amount) : -num(e.amount); return { ...e, run } }) : []
+  const kindLabel = k => ENTRY_KINDS.find(([x]) => x === k)?.[1] || ''
   return (
     <section className="card mc-start">
       <div className="card-head"><h2>Starting point</h2><button className="btn ghost small" onClick={() => setOpen(true)}><Icon name={o ? 'edit' : 'plus'} size={16} /> {o ? 'Change' : 'Set it'}</button></div>
@@ -321,11 +327,20 @@ function StartingPoint({ owners }) {
         </div>
         {num(o.owed?.amount) > 0 && <p className="small" style={{ margin: 0 }}>{o.owed.by} already owed {o.owed.to} {money(num(o.owed.amount))}.</p>}
         {owners.some(n => num(o.between?.[n]) > 0) && <p className="small" style={{ margin: 0 }}>{owners.filter(n => num(o.between?.[n]) > 0).map(n => `${n} paid ${owners.find(x => x !== n)} ${money(num(o.between[n]))}`).join('. ')}.</p>}
+        {lines.length > 0 && <div className="sl-show">
+          <div className="sl-show-h small muted"><span>Individual lines</span><span>Balance</span></div>
+          {lines.map(e => <div key={e.id} className="sl-show-r">
+            <span className="small">{shortDate(e.date || o.date)} · {kindLabel(e.kind)}{e.desc ? ` · ${e.desc}` : ''}{e.payer ? ` · ${e.payer}` : ''}</span>
+            <span className="nowrap small"><b className={e.kind === 'in' ? 'pos' : 'neg'}>{e.kind === 'in' ? '+' : '−'}{money(num(e.amount))}</b> <span className="muted">= {sm(e.run)}</span></span>
+          </div>)}
+        </div>}
       </>}
       {open && <StartingPointSheet owners={owners} onClose={() => setOpen(false)} />}
     </section>
   )
 }
+
+const ENTRY_KINDS = [['in', 'Money in'], ['materials', 'Materials out'], ['wages', 'Wages out'], ['other', 'Other out']]
 
 function StartingPointSheet({ owners, onClose }) {
   const o = openingOf() || {}
@@ -341,6 +356,8 @@ function StartingPointSheet({ owners, onClose }) {
   const setEntry = (id, p) => setD(x => ({ ...x, entries: x.entries.map(e => e.id === id ? { ...e, ...p } : e) }))
   const delEntry = id => setD(x => ({ ...x, entries: x.entries.filter(e => e.id !== id) }))
   const other = n => owners.find(x => x !== n) || ''
+  const entIn = d.entries.filter(e => e.kind === 'in').reduce((s, e) => s + num(e.amount), 0)
+  const entOut = d.entries.filter(e => e.kind !== 'in').reduce((s, e) => s + num(e.amount), 0)
   const save = () => {
     if (num(d.owed.amount) > 0 && !d.owed.by) return alert('Tap who owed the money')
     const v = { date: d.date || today(), owed: num(d.owed.amount) > 0 ? { by: d.owed.by, to: d.owed.to, amount: num(d.owed.amount) } : null, between: Object.fromEntries(owners.map(n => [n, num(d.between[n])])) }
@@ -368,22 +385,27 @@ function StartingPointSheet({ owners, onClose }) {
       <p className="small muted" style={{ marginTop: 0 }}>Money already sent from one of your accounts to the other. Leave empty if none.</p>
       {owners.map(n => <label key={n} className="field"><span>{n} paid {other(n)} (£)</span><input inputMode="decimal" placeholder="0.00" value={d.between[n]} onChange={e => setD(x => ({ ...x, between: { ...x.between, [n]: e.target.value } }))} /></label>)}
       <h3 className="sub-h">Individual payments</h3>
-      <p className="small muted" style={{ marginTop: 0 }}>Add each payment on its own: money in, or money out for materials, wages or other costs. Add as many as you need. Each one goes onto the main payment sheet on its date, or on the starting point date if left empty.</p>
-      {d.entries.map(e => (
-        <div key={e.id} className="ent-row">
-          <div className="seg small" style={{ gridTemplateColumns: 'repeat(4, 1fr)', margin: 0 }}>
-            {[['in', 'Money in'], ['materials', 'Materials'], ['wages', 'Wages'], ['other', 'Other']].map(([k, l]) => <button key={k} className={e.kind === k ? 'on' : ''} onClick={() => setEntry(e.id, { kind: k })}>{l}</button>)}
+      <p className="small muted" style={{ marginTop: 0 }}>One line per payment. Leave the date empty to use the starting point date.</p>
+      <div className="sl-tot"><span>In <b className="pos">{money(entIn)}</b></span><span>Out <b className="neg">{money(entOut)}</b></span></div>
+      <div className="sl-list">
+        {d.entries.map(e => (
+          <div key={e.id} className="sl-row">
+            <div className="sl-line1">
+              <input type="date" aria-label="Date paid" value={e.date || ''} onChange={ev => setEntry(e.id, { date: ev.target.value })} />
+              <select aria-label="Type" value={e.kind} onChange={ev => setEntry(e.id, { kind: ev.target.value })}>
+                {ENTRY_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+              <input inputMode="decimal" placeholder="£0.00" aria-label="Amount" value={e.amount} onChange={ev => setEntry(e.id, { amount: ev.target.value })} />
+            </div>
+            <div className="sl-line2">
+              <input aria-label="What for" placeholder="What for (optional)" value={e.desc || ''} onChange={ev => setEntry(e.id, { desc: ev.target.value })} />
+              <PayerToggle value={e.payer} onChange={p => setEntry(e.id, { payer: p })} />
+              <button className="icon-btn" aria-label="Remove this line" onClick={() => delEntry(e.id)}><Icon name="trash" size={16} /></button>
+            </div>
           </div>
-          <label className="field"><span>{e.kind === 'in' ? 'Whose account it went into' : 'Who paid it'}</span><PayerToggle value={e.payer} onChange={p => setEntry(e.id, { payer: p })} /></label>
-          <div className="two">
-            <label className="field"><span>Date paid</span><input type="date" value={e.date || ''} onChange={ev => setEntry(e.id, { date: ev.target.value })} /></label>
-            <label className="field"><span>{e.kind === 'in' ? 'Money in (£)' : 'Money out (£)'}</span><input inputMode="decimal" placeholder="0.00" value={e.amount} onChange={ev => setEntry(e.id, { amount: ev.target.value })} /></label>
-            <label className="field"><span>What for</span><input value={e.desc || ''} onChange={ev => setEntry(e.id, { desc: ev.target.value })} placeholder="optional" /></label>
-          </div>
-          <button className="btn ghost small" onClick={() => delEntry(e.id)}><Icon name="trash" size={16} /> Remove this payment</button>
-        </div>
-      ))}
-      <button className="btn ghost wide" onClick={addEntry}><Icon name="plus" size={18} /> Add a payment</button>
+        ))}
+      </div>
+      <button className="btn ghost wide" onClick={addEntry}><Icon name="plus" size={18} /> Add a line</button>
       <div className="sheet-actions">
         {openingOf() && <button className="btn danger" onClick={clear}><Icon name="trash" size={18} /></button>}
         <button className="btn primary" onClick={save}>Save</button>
