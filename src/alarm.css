@@ -1,0 +1,8 @@
+/* On-screen reminder pop-up: sits over whatever page is open until it's dealt with */
+.alarm-scrim { position: fixed; inset: 0; z-index: 1000; background: rgba(20, 40, 32, .55); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.alarm-box { width: min(100%, 360px); background: var(--card, #fff); color: var(--ink, #1f2a24); border-radius: 22px; padding: 22px 20px 18px; box-shadow: 0 18px 40px rgba(0, 0, 0, .3); text-align: center; }
+.alarm-ic { width: 56px; height: 56px; margin: 0 auto 10px; border-radius: 99px; background: #ff9f55; color: #fff; display: flex; align-items: center; justify-content: center; }
+.alarm-box h2 { margin: 0 0 6px; font-size: 20px; }
+.alarm-body { margin: 0 0 16px; color: var(--muted, #5b6b62); font-size: 15px; }
+.alarm-acts { display: flex; gap: 8px; }
+.alarm-acts .btn { flex: 1 1 0; }

@@ -25,6 +25,7 @@ import Share from './pages/Share'
 import VoiceButton from './Voice'
 import { Logo, UndoBar } from './ui'
 import { startReminders } from './reminders'
+import AlarmPopup from './AlarmPopup'
 
 function App() {
   const r = useRoute()
@@ -69,6 +70,7 @@ function App() {
   return <>
     {page}
     <UndoBar />
+    <AlarmPopup />
     {!['settings', 'share', 'search'].includes(r[0]) && <VoiceButton ctx={{ page: jobId ? (r[2] || 'job') : 'home', jobId, folderId: r[2] === 'folder' ? r[3] : null }} />}
   </>
 }
