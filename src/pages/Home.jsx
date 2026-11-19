@@ -23,7 +23,7 @@ import '../home-pager.css'
 import '../home-calendar.css'
 
 // The home pages, switched only from the swipe bar so swiping a list never turns the page
-const PAGE_TABS = ['Today', 'To-do', 'Money', 'Materials', 'Calendar', 'Contacts', 'Jobs']
+const PAGE_TABS = ['Today', 'To-do', 'Money', 'All jobs', 'Calendar', 'Contacts', 'Jobs']
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
