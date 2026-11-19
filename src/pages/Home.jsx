@@ -268,9 +268,9 @@ export default function Home() {
       <nav className="pbar" onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
         {PAGE_TABS.map((n, i) => <button key={n} className={'pb pb' + i + (page === i ? ' on' : '')} onClick={() => setPage(i)}>{n}</button>)}
       </nav>
-      <div className="home-today"><TodayCard /></div>
       <div className="pview"><div className="pview-track" style={{ transform: `translateX(-${page * 100}%)` }}>
         <section className="pview-page">
+        <div className="home-today"><TodayCard /></div>
         <div className="quick">
           <button onClick={() => setPick('scan')}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
           <button onClick={() => setPick('add')}><span className="q-ic green"><Icon name="money" size={24} /></span>{`Paid ${mePhone(settings.owners)}`}</button>
