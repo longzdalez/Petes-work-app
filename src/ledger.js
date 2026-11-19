@@ -52,7 +52,7 @@ export function allItems(owners) {
 }
 
 // The starting point: lump sums for everything before you started using the app (Settings record, data.opening).
-// opening = { date, in: { name: £ }, materials: { name: £ }, wages: { name: £ }, other: { name: £ }, owed: { by, to, amount }, between: { name: £ paid to the other }, entries: [{ id, kind, payer, desc, amount }] }
+// opening = { date, in: { name: £ }, materials: { name: £ }, wages: { name: £ }, other: { name: £ }, owed: { by, to, amount }, between: { name: £ paid to the other }, entries: [{ id, kind, payer, date, desc, amount }] }
 export const OPENING_ROWS = [
   { k: 'in', l: 'Money in', kind: 'income', cat: 'other', hint: 'set against each of you' },
   { k: 'materials', l: 'Materials paid out', kind: 'expense', cat: 'materials', hint: 'paid by each of you' },
@@ -75,7 +75,8 @@ export function openingItems(owners) {
     if (!a) return
     const row = OPENING_ROWS.find(r => r.k === e.kind) || OPENING_ROWS[0]
     const payer = owners.includes(e.payer) ? e.payer : owners[0]
-    out.push({ ...base, key: `opening-entry-${i}`, kind: row.kind, cat: row.cat, amount: a, desc: e.desc || `Starting point: ${row.l.toLowerCase()}`, payer, against: row.kind === 'income' ? payer : '' })
+    // A payment with its own date lands on that date; without one it sits on the starting point date
+    out.push({ ...base, date: e.date || date, key: `opening-entry-${i}`, kind: row.kind, cat: row.cat, amount: a, desc: e.desc || `Starting point: ${row.l.toLowerCase()}`, payer, against: row.kind === 'income' ? payer : '' })
   })
   // "Brian owes Pete £200" works like Pete having lent Brian £200
   const ow = o.owed || {}
