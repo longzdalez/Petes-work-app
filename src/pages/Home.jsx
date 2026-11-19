@@ -265,10 +265,10 @@ export default function Home() {
         </div>
         <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${settings.owners[0]}` : ''}</div>
       </header>
-      <div className="home-today"><TodayCard /></div>
       <nav className="pbar" onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
         {PAGE_TABS.map((n, i) => <button key={n} className={'pb pb' + i + (page === i ? ' on' : '')} onClick={() => setPage(i)}>{n}</button>)}
       </nav>
+      <div className="home-today"><TodayCard /></div>
       <div className="pview"><div className="pview-track" style={{ transform: `translateX(-${page * 100}%)` }}>
         <section className="pview-page">
         <div className="quick">
