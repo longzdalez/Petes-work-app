@@ -16,13 +16,14 @@ import { TodoList } from '../Todos'
 import { ScopeAndValue } from './Job'
 import { GeneralCashFlow } from './CashFlow'
 import { MoneyCentreCard } from './MoneyCentre'
+import { MaterialsAllJobs } from './MaterialsAll'
 import { VehicleSheet, CarIcon } from '../Vehicle'
 import { JobCalendar } from './Calendar'
 import '../home-pager.css'
 import '../home-calendar.css'
 
 // The home pages, switched only from the swipe bar so swiping a list never turns the page
-const PAGE_TABS = ['Today', 'To-do', 'Money', 'Calendar', 'Contacts', 'Jobs']
+const PAGE_TABS = ['Today', 'To-do', 'Money', 'Materials', 'Calendar', 'Contacts', 'Jobs']
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -287,6 +288,9 @@ export default function Home() {
         <section className="pview-page">
           <MoneyCentreCard />
           <GeneralCashFlow />
+        </section>
+        <section className="pview-page">
+          <MaterialsAllJobs />
         </section>
         <section className="pview-page">
           <JobCalendar />
