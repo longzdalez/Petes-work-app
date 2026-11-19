@@ -32,6 +32,32 @@ export function dueReminders() {
   return out
 }
 
+// On-screen pop-ups for to-do reminders that come due while the app is open (a web app can't put a pop-up over a locked phone)
+const LS_POP = 'pw_popped'
+let popQueue = []
+const popListeners = new Set()
+const emitPops = () => popListeners.forEach(f => f(popQueue))
+export function onPopups(fn) { popListeners.add(fn); fn(popQueue); return () => popListeners.delete(fn) }
+export function dismissPopup(id) { popQueue = popQueue.filter(p => p.id !== id); emitPops() }
+// Later: show it again in a little while, while the app stays open
+export function snoozePopup(id, ms = 10 * 60 * 1000) {
+  const popped = JSON.parse(localStorage.getItem(LS_POP) || '{}')
+  delete popped[id]
+  localStorage.setItem(LS_POP, JSON.stringify(popped))
+  dismissPopup(id)
+  setTimeout(() => checkReminders(), ms)
+}
+function popAlarms(items) {
+  if (document.visibilityState !== 'visible') return
+  const popped = JSON.parse(localStorage.getItem(LS_POP) || '{}')
+  const fresh = items.filter(it => it.alarm && !popped[it.id] && !popQueue.some(p => p.id === it.id))
+  if (!fresh.length) return
+  fresh.forEach(it => { popped[it.id] = Date.now() })
+  localStorage.setItem(LS_POP, JSON.stringify(popped))
+  popQueue = [...popQueue, ...fresh]
+  emitPops()
+}
+
 // Keep a copy where the background check can see it
 function saveForBackground(items) {
   try {
@@ -48,8 +74,8 @@ async function show(items) {
   for (const it of items) {
     if (sent[it.id]) continue
     try {
-      // To-do reminders buzz harder and stay on screen until dealt with, like an alarm
-      const alarm = it.alarm ? { vibrate: [400, 150, 400, 150, 800], requireInteraction: true, renotify: true } : {}
+      // To-do reminders give one gentle buzz; the pop-up in the app plays a soft chime
+      const alarm = it.alarm ? { vibrate: [120, 80, 120] } : {}
       if (reg) await reg.showNotification(it.title, { body: it.body, tag: it.id, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: it.url }, ...alarm })
       else new Notification(it.title, { body: it.body, tag: it.id })
       sent[it.id] = Date.now()
@@ -73,6 +99,7 @@ export function checkReminders() {
   const jobs = Object.fromEntries(list('job').map(j => [j.id, j]))
   const later = remindTodos().filter(r => r.data.remind > nowLocal()).map(r => remindItem(r, jobs))
   saveForBackground([...items, ...later])
+  popAlarms(items)
   show(items)
   scheduleNext()
 }

@@ -69,7 +69,7 @@ self.addEventListener('periodicsync', e => {
       // To-do reminders (it.at) show once their time has passed, and only once; the rest once a day
       const key = it.at ? it.id : it.id + today
       if (sent[key] || (it.at && it.at > Date.now())) continue
-      const alarm = it.alarm ? { vibrate: [400, 150, 400, 150, 800], requireInteraction: true, renotify: true } : {}
+      const alarm = it.alarm ? { vibrate: [120, 80, 120] } : {}
       await self.registration.showNotification(it.title, { body: it.body, tag: it.id, icon: 'icons/icon-192.png', data: { url: it.url }, ...alarm })
       sent[key] = 1
     }
