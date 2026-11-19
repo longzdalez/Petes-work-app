@@ -345,7 +345,7 @@ function StartingPointSheet({ owners, onClose }) {
     if (num(d.owed.amount) > 0 && !d.owed.by) return alert('Tap who owed the money')
     const v = { date: d.date || today(), owed: num(d.owed.amount) > 0 ? { by: d.owed.by, to: d.owed.to, amount: num(d.owed.amount) } : null, between: Object.fromEntries(owners.map(n => [n, num(d.between[n])])) }
     OPENING_ROWS.forEach(r => { v[r.k] = Object.fromEntries(owners.map(n => [n, num(d[r.k][n])])) })
-    v.entries = d.entries.filter(e => num(e.amount) > 0).map(e => ({ id: e.id, kind: e.kind, payer: e.payer, desc: (e.desc || '').trim(), amount: num(e.amount) }))
+    v.entries = d.entries.filter(e => num(e.amount) > 0).map(e => ({ id: e.id, kind: e.kind, payer: e.payer, date: e.date || '', desc: (e.desc || '').trim(), amount: num(e.amount) }))
     setS({ opening: v }); onClose()
   }
   const clear = () => { if (confirm('Remove the starting point? The tally will then only count payments in the app.')) { setS({ opening: null }); onClose() } }
@@ -368,7 +368,7 @@ function StartingPointSheet({ owners, onClose }) {
       <p className="small muted" style={{ marginTop: 0 }}>Money already sent from one of your accounts to the other. Leave empty if none.</p>
       {owners.map(n => <label key={n} className="field"><span>{n} paid {other(n)} (£)</span><input inputMode="decimal" placeholder="0.00" value={d.between[n]} onChange={e => setD(x => ({ ...x, between: { ...x.between, [n]: e.target.value } }))} /></label>)}
       <h3 className="sub-h">Individual payments</h3>
-      <p className="small muted" style={{ marginTop: 0 }}>Add each payment on its own: money in, or money out for materials, wages or other costs. Add as many as you need.</p>
+      <p className="small muted" style={{ marginTop: 0 }}>Add each payment on its own: money in, or money out for materials, wages or other costs. Add as many as you need. Each one goes onto the main payment sheet on its date, or on the starting point date if left empty.</p>
       {d.entries.map(e => (
         <div key={e.id} className="ent-row">
           <div className="seg small" style={{ gridTemplateColumns: 'repeat(4, 1fr)', margin: 0 }}>
@@ -376,6 +376,7 @@ function StartingPointSheet({ owners, onClose }) {
           </div>
           <label className="field"><span>{e.kind === 'in' ? 'Whose account it went into' : 'Who paid it'}</span><PayerToggle value={e.payer} onChange={p => setEntry(e.id, { payer: p })} /></label>
           <div className="two">
+            <label className="field"><span>Date paid</span><input type="date" value={e.date || ''} onChange={ev => setEntry(e.id, { date: ev.target.value })} /></label>
             <label className="field"><span>{e.kind === 'in' ? 'Money in (£)' : 'Money out (£)'}</span><input inputMode="decimal" placeholder="0.00" value={e.amount} onChange={ev => setEntry(e.id, { amount: ev.target.value })} /></label>
             <label className="field"><span>What for</span><input value={e.desc || ''} onChange={ev => setEntry(e.id, { desc: ev.target.value })} placeholder="optional" /></label>
           </div>
