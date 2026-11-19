@@ -31,7 +31,14 @@ export default function AlarmPopup() {
   const [queue, setQueue] = useState([])
   useEffect(() => onPopups(setQueue), [])
   const cur = queue[0]
-  useEffect(() => { if (cur) chime() }, [cur?.id])
+  // Chime straight away, then again every few seconds while the pop-up is up (stops after about a minute, or when it's dealt with)
+  useEffect(() => {
+    if (!cur) return
+    chime()
+    let n = 0
+    const every = setInterval(() => { n++; if (n >= 15) clearInterval(every); else chime() }, 4000)
+    return () => clearInterval(every)
+  }, [cur?.id])
   if (!cur) return null
   const todoId = cur.id.split('@')[0]
   const later = () => snoozePopup(cur.id)
