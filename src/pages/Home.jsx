@@ -275,7 +275,6 @@ export default function Home() {
       </header>
       <div className="pview"><div className="pview-track" style={{ transform: `translateX(-${page * 100}%)` }}>
         <section className="pview-page">
-        <div className="home-today"><TodayCard /></div>
         <div className="quick">
           <button onClick={() => setPick('scan')}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
           <button onClick={() => setPick('add')}><span className="q-ic green"><Icon name="money" size={24} /></span>{`Paid ${mePhone(settings.owners)}`}</button>
@@ -283,6 +282,7 @@ export default function Home() {
           <button onClick={() => setAdding(true)}><span className="q-ic white"><Icon name="plus" size={24} /></span>New job</button>
           <button onClick={() => setPage(1)}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
         </div>
+        <div className="home-today"><TodayCard /></div>
         <BackupReminder />
         </section>
         <section className="pview-page">
