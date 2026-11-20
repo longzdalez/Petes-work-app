@@ -4,7 +4,7 @@ import { Icon, Sheet, Field, TopBar, Empty, useLongPress, confirmDelete, SwipeRo
 import { ProfitRing, Glyph } from '../ui2'
 import { jobMoney, shortMoney, todayItems, unpaidInvoices, urgentCount } from '../summary'
 import { useSettings } from './Settings'
-import { niceDate, today, initials, money, parseYmd, ymd, shortDate, URGENCY } from '../util'
+import { niceDate, today, initials, money, parseYmd, ymd, shortDate, URGENCY, vibrate } from '../util'
 import { nav } from '../router'
 import { BackupReminder } from '../Backup'
 import { JOB_STATUS, jobProgress, applyTemplate, smallImage, jobStatus } from '../jobs'
@@ -21,6 +21,7 @@ import { JobListPage } from './JobList'
 import { OwedPage } from './Owed'
 import { VehicleSheet, CarIcon } from '../Vehicle'
 import { JobCalendar } from './Calendar'
+import QuickMoney, { SavedToast } from '../QuickMoney'
 import '../home-pager.css'
 import '../home-calendar.css'
 
@@ -118,22 +119,6 @@ function JobCard({ job, onLong }) {
   )
 }
 
-// Pick which job a receipt or payment is for
-function JobPickSheet({ action, onClose }) {
-  const jobs = useList('job', r => jobStatus(r.data) !== 'finished', (a, b) => (b.data.created || '').localeCompare(a.data.created || ''))
-  if (!action) return null
-  const go = j => { onClose(); nav(`/job/${j.id}/money?do=${action}`) }
-  return (
-    <Sheet open onClose={onClose} title={action === 'scan' ? 'Which job is the receipt for?' : 'Which job is the money for?'}>
-      {jobs.length === 0 && <p className="muted">Make a job first, then add money to it.</p>}
-      <div className="pick-list">
-        {jobs.map(j => <button key={j.id} className="pick-row" onClick={() => go(j)}><span className="job-avatar small">{j.data.cover ? <img src={j.data.cover} alt="" /> : initials(j.data.name)}</span><span className="text"><b>{j.data.name || 'Untitled job'}</b><span>{j.data.client}</span></span><Icon name="right" size={20} /></button>)}
-      </div>
-      <p className="small muted">For business payments not tied to a job, like van finance, use Recurring payments on the home page.</p>
-    </Sheet>
-  )
-}
-
 // Most urgent first: red (urgent or late) at the top, then amber, then the rest
 const urgencyRank = it => (it.urgent || it.late || it.color === URGENCY.red.color) ? 0 : it.color === URGENCY.amber.color ? 1 : 2
 
@@ -146,12 +131,13 @@ function TodayCard() {
       <div className="card-head"><h2>Today</h2><span className="pill">{items.length ? `${items.length} thing${items.length > 1 ? 's' : ''}` : 'All clear'}</span></div>
       {items.length === 0 && <p className="muted small" style={{ margin: 0 }}>Nothing booked for today. Work from the Schedule, to-dos, urgent materials and payments due show here.</p>}
       {shown.map(it => (
-        <button key={it.id} className="t-row" onClick={() => it.url && nav(it.url)}>
+        <div key={it.id} className="t-row" role="button" tabIndex={0} onClick={() => it.url && nav(it.url)}>
           <span className={'t-when' + (it.late || it.urgent ? ' late' : '')}>{it.label}</span>
           <span className="t-dot" style={{ background: it.color, boxShadow: `0 0 0 3px ${it.color}26` }} />
           <span className="t-text"><b>{it.title}{it.urgent && <em className="urgent-tag">Urgent</em>}</b>{it.sub && <span>{it.sub}</span>}</span>
           {it.amount ? <span className={'t-amt ' + (it.dir === 'in' ? 'pos' : 'neg')}>{it.dir === 'in' ? '+' : '−'}{money(it.amount)}</span> : null}
-        </button>
+          {it.tick && <button className="t-tick" aria-label={`Done: ${it.title}`} onClick={e => { e.stopPropagation(); vibrate(20); update(it.id, { done: true, doneOn: today() }) }}><Icon name="check" size={18} stroke={3} /></button>}
+        </div>
       ))}
       {items.length > shown.length && <p className="small muted" style={{ margin: '8px 0 0' }}>…and {items.length - shown.length} more</p>}
     </section>
@@ -250,7 +236,9 @@ export default function Home() {
   const [ordering, setOrdering] = useState(false)
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
-  const [pick, setPick] = useState(null)
+  const [qm, setQm] = useState(null)
+  const [saved, setSaved] = useState(null)
+  const scan = async () => { const [f] = await pickFile({ accept: 'image/*,application/pdf' }); if (f) setQm({ file: f, data: { dir: 'out', cat: 'materials' } }) }
   const [car, setCar] = useState(false)
   const st = useStatus()
   const settings = useSettings()
@@ -271,14 +259,19 @@ export default function Home() {
             {cloudEnabled && <span className={'sync-dot ' + (st.signedIn && !st.error ? 'ok' : 'bad')} />}
             <Icon name="settings" size={20} /></button>
         </div>
-        <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${settings.owners[0]}` : ''}</div>
+        <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${mePhone(settings.owners)}` : ''}</div>
+        <div className="hh-glance">
+          <button onClick={() => setPage(6)}><b>{shortMoney(owedTotal)}</b><span>Invoices unpaid</span></button>
+          <button className={urgent ? 'hot' : ''} onClick={() => setPage(0)}><b>{urgent}</b><span>Urgent</span></button>
+          <button onClick={() => setPage(4)}><b>{onsite.length}</b><span>On site now</span></button>
+        </div>
       </header>
       <div className="pview"><div className="pview-track" style={{ transform: `translateX(-${page * 100}%)` }}>
         <section className="pview-page">
         <div className="quick">
-          <button onClick={() => setPick('scan')}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
-          <button onClick={() => setPick('add')}><span className="q-ic green"><Icon name="money" size={24} /></span>{`Paid ${mePhone(settings.owners)}`}</button>
-          <button onClick={() => setCar(true)} aria-label="Vehicle costs: ULEZ, congestion, fuel, tickets"><span className="q-ic white"><CarIcon /></span></button>
+          <button onClick={scan}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
+          <button onClick={() => setQm({})}><span className="q-ic green"><Icon name="money" size={24} /></span>{`Paid ${mePhone(settings.owners)}`}</button>
+          <button onClick={() => setCar(true)} aria-label="Vehicle costs: ULEZ, congestion, fuel, tickets"><span className="q-ic white"><CarIcon /></span>Car</button>
           <button onClick={() => setAdding(true)}><span className="q-ic white"><Icon name="plus" size={24} /></span>New job</button>
           <button onClick={() => setPage(1)}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
         </div>
@@ -339,7 +332,8 @@ export default function Home() {
       </nav>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
       <NewJobSheet open={adding} onClose={() => setAdding(false)} />
-      <JobPickSheet action={pick} onClose={() => setPick(null)} />
+      {qm && <QuickMoney start={qm} onClose={() => setQm(null)} onSaved={setSaved} />}
+      <SavedToast saved={saved} onDone={() => setSaved(null)} />
       <VehicleSheet open={car} onClose={() => setCar(false)} />
     </div>
   )

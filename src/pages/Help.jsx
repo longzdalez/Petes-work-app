@@ -5,8 +5,8 @@ import { back } from '../router'
 const TOPICS = [
   { t: 'Start a new job', s: ['On the home page, tap New job.', 'Type the job name and client details, then Save.', 'Tap the job to open it. Everything for that job lives inside it.'] },
   { t: 'Inside a job', s: ['Use the buttons along the top: Materials, Money, Schedule, Invoices, Photos, Hours and more.', 'The Overview shows what the job is worth and what has been paid.', 'When the job is done, set it to Finished and it moves to the Finished jobs folder.'] },
-  { t: 'Scan a receipt', s: ['On the home page, tap Scan receipt.', 'Pick the job and take a photo.', 'Check the amount, tap B or P for who paid, then Save.'] },
-  { t: 'Add money in or out', s: ['Tap Add money on the home page, or open a job and go to Money.', 'Put in the amount and what it was for.', 'Tap B (Brian) or P (Pete) to say who paid, or whose account it went into.', 'For money in, also fill in who paid it, and who it\'s set against (Brian or Pete).'] },
+  { t: 'Scan a receipt', s: ['On the home page, tap Scan receipt and take a photo (or pick one).', 'The app reads the amount, VAT, shop and date.', 'Tap the job, check B or P for who paid, then Save.'] },
+  { t: 'Add money in or out', s: ['Tap Paid on the home page (or open a job and go to Money).', 'Type the amount, then tap the job and the type. The last job you used is already picked.', 'Who paid is set to whoever\'s phone this is. Tap B or P to change it.', 'Tap a recent description to reuse it, or type a new one. Use Save + next to add several in a row.', 'Made a mistake? Tap Undo on the Saved message.'] },
   { t: 'To-do reminders', s: ['Tap the bell next to a to-do.', 'Pick a quick time, like Tomorrow 8am, or choose a date and time.', 'Tap Save reminder. The first time, allow notifications when your phone asks.', 'Your phone buzzes at that time. If the app was fully closed, the reminder shows as soon as you open it.'] },
   { t: 'Car costs', s: ['Tap the car button on the home page.', 'Fill in ULEZ, congestion, fuel or tickets.', 'Tap B or P for each one, then Save.'] },
   { t: 'Quotes and invoices', s: ['Open the job and tap Invoices & quotes.', 'Tap New invoice or New quote, fill in the lines, then Send or Save PDF.', 'When the client pays, set the status to Paid and pick whose account it went into.'] },
@@ -18,6 +18,7 @@ const TOPICS = [
   { t: 'Repeat payments', s: ['Things like van finance or insurance that come out every month.', 'Tap B or P next to each one to say who pays it.', 'Tick it off when it has been paid.'] },
   { t: 'Talk instead of typing', s: ['Tap the orange microphone button.', 'Say what you want to add, like a to-do, a material, hours or some money.', 'Check what it heard, then Save.'] },
   { t: 'Keep it safe', s: ['Settings has Sharing between phones, so you both see the same jobs.', 'In Settings, use Back up your jobs to send a copy to yourself, so nothing is lost if the phone is.'] },
+  { t: 'Tick things off from Today', s: ['On the Today card, tap the tick beside a to-do or a material to mark it done without opening it.'] },
 ]
 
 export default function Help() {

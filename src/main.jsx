@@ -26,6 +26,8 @@ import VoiceButton from './Voice'
 import { Logo, UndoBar } from './ui'
 import { startReminders } from './reminders'
 import AlarmPopup from './AlarmPopup'
+// Loaded after every page so the slick look sits on top
+import './theme3d.css'
 
 function App() {
   const r = useRoute()
