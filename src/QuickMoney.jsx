@@ -8,7 +8,6 @@ import { money, num, today, ymd, shortDate, vibrate } from './util'
 import { storeFile, pickFile } from './files'
 import { readReceipt } from './receipt'
 import { PayerToggle } from './Vehicle'
-import { useSettings } from './pages/Settings'
 import { isLocked, lockMsg, findDuplicate } from './ledger'
 import { jobStatus } from './jobs'
 
@@ -37,11 +36,9 @@ function topDescs(dir) {
 }
 
 export default function QuickMoney({ start, onClose, onSaved }) {
-  const { owners } = useSettings()
-  const me = (() => { try { return localStorage.getItem('pw_me') || owners[0] } catch { return owners[0] } })()
   const jobs = useLiveJobs()
   const firstJob = () => { const l = lastJob(); return l === NO_JOB || jobs.some(j => j.id === l) ? l : (jobs[0]?.id || NO_JOB) }
-  const blank = () => ({ dir: 'out', cat: 'materials', amount: '', desc: '', person: '', payer: me, date: today(), status: 'paid', job: firstJob(), receipt: null, vat: '' })
+  const blank = () => ({ dir: 'out', cat: 'materials', amount: '', desc: '', person: '', payer: '', date: today(), status: 'paid', job: firstJob(), receipt: null, vat: '' })
   const [d, setD] = useState(() => ({ ...blank(), ...(start?.data || {}) }))
   const [busy, setBusy] = useState('')
   const [read, setRead] = useState('')
@@ -49,6 +46,7 @@ export default function QuickMoney({ start, onClose, onSaved }) {
   const amountRef = useRef(null)
   const set = p => setD(x => ({ ...x, ...p }))
   const job = jobs.find(j => j.id === d.job)
+  const scan = !!start?.file
 
   // Read a receipt photo: fills in the amount, VAT, shop and date where it can
   const readFile = async f => {
@@ -81,8 +79,8 @@ export default function QuickMoney({ start, onClose, onSaved }) {
     const rec = put('money', data, { job_id: d.job === NO_JOB ? null : d.job })
     try { localStorage.setItem(LAST_JOB, d.job) } catch { }
     vibrate(20)
-    onSaved && onSaved({ id: rec.id, text: `${d.dir === 'in' ? '+' : '−'}${money(amount)} · ${job ? job.data.name : 'No job'}` })
-    if (again) { setD(x => ({ ...blank(), dir: x.dir, cat: x.cat, job: x.job, payer: x.payer, date: x.date })); setRead(''); setTimeout(() => amountRef.current?.focus(), 50) }
+    onSaved && onSaved({ id: rec.id, text: `${d.dir === 'in' ? '+' : '−'}${money(amount)} · ${job ? job.data.name : scan ? 'Miscellaneous' : 'No job'}` })
+    if (again) { setD(x => ({ ...blank(), dir: x.dir, cat: x.cat, job: x.job, date: x.date })); setRead(''); setTimeout(() => amountRef.current?.focus(), 50) }
     else onClose()
   }
 
@@ -103,8 +101,9 @@ export default function QuickMoney({ start, onClose, onSaved }) {
 
       <span className="qm-label">Job</span>
       <div className="qm-scroll">
+        {scan && <button className={'chip' + (d.job === NO_JOB ? ' on' : '')} onClick={() => set({ job: NO_JOB, cat: 'other' })}>Miscellaneous</button>}
         {jobs.map(j => <button key={j.id} className={'chip' + (d.job === j.id ? ' on' : '')} onClick={() => set({ job: j.id })}>{j.data.name || 'Untitled job'}</button>)}
-        <button className={'chip' + (d.job === NO_JOB ? ' on' : '')} onClick={() => set({ job: NO_JOB })}>No job</button>
+        {!scan && <button className={'chip' + (d.job === NO_JOB ? ' on' : '')} onClick={() => set({ job: NO_JOB })}>No job</button>}
       </div>
 
       <span className="qm-label">Type</span>

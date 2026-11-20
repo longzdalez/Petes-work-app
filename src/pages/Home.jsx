@@ -260,11 +260,6 @@ export default function Home() {
             <Icon name="settings" size={20} /></button>
         </div>
         <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${mePhone(settings.owners)}` : ''}</div>
-        <div className="hh-glance">
-          <button onClick={() => setPage(6)}><b>{shortMoney(owedTotal)}</b><span>Invoices unpaid</span></button>
-          <button className={urgent ? 'hot' : ''} onClick={() => setPage(0)}><b>{urgent}</b><span>Urgent</span></button>
-          <button onClick={() => setPage(4)}><b>{onsite.length}</b><span>On site now</span></button>
-        </div>
       </header>
       <div className="pview"><div className="pview-track" style={{ transform: `translateX(-${page * 100}%)` }}>
         <section className="pview-page">
