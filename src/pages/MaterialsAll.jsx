@@ -19,7 +19,8 @@ export function MaterialsAllJobs() {
   rows = [...rows].sort((a, b) => (RANK[a.data.urgency] ?? 3) - (RANK[b.data.urgency] ?? 3) || (a.data.date || '9999-99-99').localeCompare(b.data.date || '9999-99-99'))
   return (
     <main className="content home-content">
-      <div className="section-head"><h2>Materials</h2></div>
+      <section className="card">
+      <div className="card-head"><h2>Materials</h2></div>
       <button className="btn ghost wide" style={{ marginBottom: 12 }} onClick={() => setAll(a => !a)}>{all ? 'Show urgent only' : 'Show all materials'}</button>
       {rows.length === 0 && <p className="muted small">{all ? 'No materials on any job yet.' : 'Nothing marked urgent.'}</p>}
       {rows.map(r => {
@@ -35,6 +36,7 @@ export function MaterialsAllJobs() {
           </div>
         )
       })}
+      </section>
     </main>
   )
 }
