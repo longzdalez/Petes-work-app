@@ -1,20 +1,27 @@
-/* Home: shorter green header, a swipe bar of five coloured tabs, and pages that only change from the bar */
-.home-hero { padding: 6px 16px 12px; padding-top: max(6px, env(safe-area-inset-top)); border-radius: 0 0 22px 22px; }
+/* Home: header at the top, the page in the middle, and the tabs pinned to the bottom (they scroll sideways if they run out of room) */
+.home-screen { display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; padding-bottom: 0; overflow: hidden; }
+.home-hero { flex: 0 0 auto; padding: 6px 16px 12px; padding-top: max(6px, env(safe-area-inset-top)); border-radius: 0 0 22px 22px; }
 .home-hero .hh-greet { font-size: 15px; margin-top: 2px; }
-.pbar { display: flex; gap: 6px; padding: 10px 10px 8px; background: var(--bg); touch-action: none; user-select: none; -webkit-user-select: none; }
-.pbar .pb { flex: 1 1 0; min-width: 0; font: inherit; font-size: 11px; font-weight: 900; padding: 8px 2px; white-space: nowrap; transition: transform .15s ease, box-shadow .15s ease; }
+.pview { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.pview-track { display: flex; height: 100%; transition: transform .3s ease; will-change: transform; }
+.pview-page { flex: 0 0 100%; min-width: 100%; box-sizing: border-box; height: 100%; overflow-y: auto; padding: 0 14px 24px; -webkit-overflow-scrolling: touch; }
+.pview-page .section-head { margin-top: 6px; }
+.pbar { flex: 0 0 auto; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line, #d9e3dd); touch-action: pan-x; user-select: none; -webkit-user-select: none; }
+.pbar::-webkit-scrollbar { display: none; }
+.pbar .pb { flex: 0 0 auto; min-width: 62px; font: inherit; font-size: 11px; font-weight: 900; padding: 8px 6px; white-space: nowrap; transition: transform .15s ease, box-shadow .15s ease; }
 .pbar .pb.on { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(31, 77, 58, .18); }
-/* Seven tabs, three brand colours (green #2f7a57, orange #ff9f55, mid green #3b9268), each a different shape */
+/* Ten tabs, each a different shape; brand colours green #2f7a57, orange #ff9f55, mid green #3b9268 */
 .pbar .pb0 { background: #2f7a57; color: #fff; border: 0; border-radius: 99px; }
 .pbar .pb1 { background: #fff; color: #ff9f55; border: 2px solid #ff9f55; border-radius: 99px; }
-.pbar .pb2 { background: transparent; color: #3b9268; border: 0; border-bottom: 4px solid #3b9268; border-radius: 0; }
+/* To Get: amber */
+.pbar .pb2 { background: #fdf0e0; color: #b35a10; border: 2px solid #f0a020; border-radius: 6px 6px 18px 18px; }
 .pbar .pb3 { background: #ff9f55; color: #fff; border: 0; border-radius: 8px; text-transform: uppercase; letter-spacing: .04em; }
-.pbar .pb5 { background: #eef7f2; color: #3b9268; border: 2px solid #3b9268; border-radius: 4px 18px 4px 18px; }
 .pbar .pb4 { background: #fff; color: #2f7a57; border: 2px dashed #2f7a57; border-radius: 18px 4px 18px 4px; }
-.pview { overflow: hidden; }
-.pview-track { display: flex; transition: transform .3s ease; will-change: transform; }
-.pview-page { flex: 0 0 100%; min-width: 100%; box-sizing: border-box; height: calc(100dvh - 176px); overflow-y: auto; padding: 0 14px 90px; }
-.pview-page .section-head { margin-top: 6px; }
+.pbar .pb5 { background: #eef7f2; color: #3b9268; border: 2px solid #3b9268; border-radius: 4px 18px 4px 18px; }
+.pbar .pb6 { background: #fff; color: #3b9268; border: 2px solid #7cc4a0; border-radius: 99px; }
+.pbar .pb7 { background: #2f7a57; color: #fff; border: 0; border-radius: 4px; }
+.pbar .pb8 { background: #ffe9d6; color: #c4611a; border: 2px solid #ff9f55; border-radius: 99px 99px 4px 4px; }
+.pbar .pb9 { background: #3b9268; color: #fff; border: 0; border-radius: 18px 4px 18px 4px; }
 .ent-row { border: 1px solid var(--line); border-radius: 16px; padding: 10px; margin-bottom: 10px; display: grid; gap: 6px; }
 
 /* Starting point: one line per payment */

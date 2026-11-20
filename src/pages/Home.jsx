@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { put, update, removeDeep, useList, useStatus, useVersion, cloudEnabled, list, get } from '../store'
 import { Icon, Sheet, Field, TopBar, Empty, useLongPress, confirmDelete, SwipeRow, Logo } from '../ui'
 import { ProfitRing, Glyph } from '../ui2'
 import { jobMoney, shortMoney, todayItems, unpaidInvoices, urgentCount } from '../summary'
 import { useSettings } from './Settings'
-import { niceDate, today, initials, money, parseYmd, ymd, shortDate } from '../util'
+import { niceDate, today, initials, money, parseYmd, ymd, shortDate, URGENCY } from '../util'
 import { nav } from '../router'
 import { BackupReminder } from '../Backup'
 import { JOB_STATUS, jobProgress, applyTemplate, smallImage, jobStatus } from '../jobs'
@@ -17,13 +17,15 @@ import { ScopeAndValue } from './Job'
 import { GeneralCashFlow } from './CashFlow'
 import { MoneyCentreCard } from './MoneyCentre'
 import { MaterialsAllJobs } from './MaterialsAll'
+import { JobListPage } from './JobList'
+import { OwedPage } from './Owed'
 import { VehicleSheet, CarIcon } from '../Vehicle'
 import { JobCalendar } from './Calendar'
 import '../home-pager.css'
 import '../home-calendar.css'
 
 // The home pages, switched only from the swipe bar so swiping a list never turns the page
-const PAGE_TABS = ['Today', 'To-do', 'Money', 'All jobs', 'Calendar', 'Contacts', 'Jobs']
+const PAGE_TABS = ['Today', 'To-do', 'To Get', 'Money', 'Job list', 'Materials', 'Owed', 'Calendar', 'Contacts', 'Jobs']
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -132,10 +134,13 @@ function JobPickSheet({ action, onClose }) {
   )
 }
 
-function TodayCard({ limit = 8 }) {
+// Most urgent first: red (urgent or late) at the top, then amber, then the rest
+const urgencyRank = it => (it.urgent || it.late || it.color === URGENCY.red.color) ? 0 : it.color === URGENCY.amber.color ? 1 : 2
+
+function TodayCard() {
   useVersion()
-  const items = todayItems()
-  const shown = items.slice(0, limit)
+  const items = [...todayItems()].sort((a, b) => urgencyRank(a) - urgencyRank(b))
+  const shown = items
   return (
     <section className="card today2">
       <div className="card-head"><h2>Today</h2><span className="pill">{items.length ? `${items.length} thing${items.length > 1 ? 's' : ''}` : 'All clear'}</span></div>
@@ -234,6 +239,8 @@ export default function Home() {
   const allJobs = useList('job')
   const finished = allJobs.filter(j => j.data.status === 'finished')
   const [page, setPage] = useState(0)
+  const barRef = useRef(null)
+  useEffect(() => { barRef.current?.querySelector('.pb.on')?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' }) }, [page])
   const swipeX = useRef(0)
   const swipeStart = e => { swipeX.current = e.touches[0].clientX }
   const swipeEnd = e => {
@@ -255,7 +262,7 @@ export default function Home() {
   const t = today()
   const people = new Set(list('task', r => r.data.date === t && r.data.trade_id && onsite.some(j => j.id === r.job_id)).map(r => r.data.trade_id)).size
   return (
-    <div className="page">
+    <div className="page home-screen">
       <header className="home-hero">
         <div className="hh-top">
           <Logo />
@@ -266,9 +273,6 @@ export default function Home() {
         </div>
         <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${settings.owners[0]}` : ''}</div>
       </header>
-      <nav className="pbar" onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
-        {PAGE_TABS.map((n, i) => <button key={n} className={'pb pb' + i + (page === i ? ' on' : '')} onClick={() => setPage(i)}>{n}</button>)}
-      </nav>
       <div className="pview"><div className="pview-track" style={{ transform: `translateX(-${page * 100}%)` }}>
         <section className="pview-page">
         <div className="home-today"><TodayCard /></div>
@@ -283,6 +287,8 @@ export default function Home() {
         </section>
         <section className="pview-page">
           <TodoList title="To-do" />
+        </section>
+        <section className="pview-page">
           <TodoList title="To Get" kind="toget" showCalendar={false} />
         </section>
         <section className="pview-page">
@@ -290,7 +296,13 @@ export default function Home() {
           <GeneralCashFlow />
         </section>
         <section className="pview-page">
+          <JobListPage />
+        </section>
+        <section className="pview-page">
           <MaterialsAllJobs />
+        </section>
+        <section className="pview-page">
+          <OwedPage />
         </section>
         <section className="pview-page">
           <JobCalendar />
@@ -322,6 +334,9 @@ export default function Home() {
         </main>
         </section>
       </div></div>
+      <nav className="pbar" ref={barRef} onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
+        {PAGE_TABS.map((n, i) => <button key={n} className={'pb pb' + i + (page === i ? ' on' : '')} onClick={() => setPage(i)}>{n}</button>)}
+      </nav>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
       <NewJobSheet open={adding} onClose={() => setAdding(false)} />
       <JobPickSheet action={pick} onClose={() => setPick(null)} />
