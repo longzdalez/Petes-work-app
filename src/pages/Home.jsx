@@ -25,7 +25,7 @@ import '../home-pager.css'
 import '../home-calendar.css'
 
 // The home pages, switched only from the swipe bar so swiping a list never turns the page
-const PAGE_TABS = ['Today', 'To-do', 'Money', 'Job list', 'Materials', 'Owed', 'Calendar', 'Contacts', 'Jobs']
+const PAGE_TABS = ['Today', 'To-do', 'To Get', 'Money', 'Job list', 'Materials', 'Owed', 'Calendar', 'Contacts', 'Jobs']
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -287,6 +287,8 @@ export default function Home() {
         </section>
         <section className="pview-page">
           <TodoList title="To-do" />
+        </section>
+        <section className="pview-page">
           <TodoList title="To Get" kind="toget" showCalendar={false} />
         </section>
         <section className="pview-page">
