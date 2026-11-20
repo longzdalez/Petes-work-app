@@ -10,16 +10,18 @@
 .pbar::-webkit-scrollbar { display: none; }
 .pbar .pb { flex: 0 0 auto; min-width: 62px; font: inherit; font-size: 11px; font-weight: 900; padding: 8px 6px; white-space: nowrap; transition: transform .15s ease, box-shadow .15s ease; }
 .pbar .pb.on { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(31, 77, 58, .18); }
-/* Nine tabs, each a different shape; brand colours green #2f7a57, orange #ff9f55, mid green #3b9268 */
+/* Ten tabs, each a different shape; brand colours green #2f7a57, orange #ff9f55, mid green #3b9268 */
 .pbar .pb0 { background: #2f7a57; color: #fff; border: 0; border-radius: 99px; }
 .pbar .pb1 { background: #fff; color: #ff9f55; border: 2px solid #ff9f55; border-radius: 99px; }
-.pbar .pb2 { background: transparent; color: #3b9268; border: 0; border-bottom: 4px solid #3b9268; border-radius: 0; }
+/* To Get: amber */
+.pbar .pb2 { background: #fdf0e0; color: #b35a10; border: 2px solid #f0a020; border-radius: 6px 6px 18px 18px; }
 .pbar .pb3 { background: #ff9f55; color: #fff; border: 0; border-radius: 8px; text-transform: uppercase; letter-spacing: .04em; }
 .pbar .pb4 { background: #fff; color: #2f7a57; border: 2px dashed #2f7a57; border-radius: 18px 4px 18px 4px; }
 .pbar .pb5 { background: #eef7f2; color: #3b9268; border: 2px solid #3b9268; border-radius: 4px 18px 4px 18px; }
 .pbar .pb6 { background: #fff; color: #3b9268; border: 2px solid #7cc4a0; border-radius: 99px; }
 .pbar .pb7 { background: #2f7a57; color: #fff; border: 0; border-radius: 4px; }
 .pbar .pb8 { background: #ffe9d6; color: #c4611a; border: 2px solid #ff9f55; border-radius: 99px 99px 4px 4px; }
+.pbar .pb9 { background: #3b9268; color: #fff; border: 0; border-radius: 18px 4px 18px 4px; }
 .ent-row { border: 1px solid var(--line); border-radius: 16px; padding: 10px; margin-bottom: 10px; display: grid; gap: 6px; }
 
 /* Starting point: one line per payment */
