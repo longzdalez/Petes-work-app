@@ -207,7 +207,7 @@ export default function Settings() {
             <li>Open BP Builders from the new icon. To add files from WhatsApp or email, press <b>Share</b> on the file and choose <b>BP Builders</b>.</li>
           </ol>
         </section>
-        <p className="hint">BP Builders · version 1.0 · update v22 (18 Nov 2026)</p>
+        <p className="hint">BP Builders · version 1.0 · update v24 (20 Nov 2026)</p>
       </main>
     </div>
   )

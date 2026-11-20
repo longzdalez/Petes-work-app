@@ -45,10 +45,10 @@ export function todayItems() {
   })
   list('todo', r => !r.data.done && r.data.date && r.data.date <= t && live(r)).forEach(r => {
     const late = r.data.date < t
-    out.push({ id: r.id, order: r.data.time ? 0 : 2, time: r.data.time || '', label: r.data.time || (late ? 'Late' : 'To-do'), late, color: URGENCY[r.data.urgency]?.color || '#ff9f55', title: r.data.text, sub: ['To-do', jobName(r)].filter(Boolean).join(' · '), url: r.job_id ? `/job/${r.job_id}/todos` : '' })
+    out.push({ id: r.id, tick: true, order: r.data.time ? 0 : 2, time: r.data.time || '', label: r.data.time || (late ? 'Late' : 'To-do'), late, color: URGENCY[r.data.urgency]?.color || '#ff9f55', title: r.data.text, sub: ['To-do', jobName(r)].filter(Boolean).join(' · '), url: r.job_id ? `/job/${r.job_id}/todos` : '' })
   })
   list('material', r => !r.data.done && r.data.urgency === 'red' && r.data.date && r.data.date <= soon && r.data.text && folders[r.data.folder_id] && live(r)).forEach(r => {
-    out.push({ id: r.id, order: 3, label: 'Order', urgent: true, color: URGENCY.red.color, title: (r.data.qty ? r.data.qty + ' x ' : '') + r.data.text, sub: [`Needed ${r.data.date === t ? 'today' : shortDate(r.data.date)}`, jobName(r)].filter(Boolean).join(' · '), url: `/job/${r.job_id}/folder/${r.data.folder_id}` })
+    out.push({ id: r.id, tick: true, order: 3, label: 'Order', urgent: true, color: URGENCY.red.color, title: (r.data.qty ? r.data.qty + ' x ' : '') + r.data.text, sub: [`Needed ${r.data.date === t ? 'today' : shortDate(r.data.date)}`, jobName(r)].filter(Boolean).join(' · '), url: `/job/${r.job_id}/folder/${r.data.folder_id}` })
   })
   list('genpay').forEach(rec => occurrences(rec, t, t).filter(o => !o.paid).forEach(o => {
     out.push({ id: rec.id + o.date, order: 4, label: rec.data.dir === 'in' ? 'Due' : 'Pay', color: '#3b9268', title: rec.data.desc, sub: 'Repeat payments', amount: num(rec.data.amount), dir: rec.data.dir || 'out', url: '/cashflow' })
