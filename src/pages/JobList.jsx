@@ -11,7 +11,8 @@ export function JobListPage() {
   const shown = all ? jobs : jobs.filter(j => jobStatus(j.data) !== 'finished')
   return (
     <main className="content home-content">
-      <div className="section-head"><h2>Job list</h2></div>
+      <section className="card">
+      <div className="card-head"><h2>Job list</h2></div>
       <button className="btn ghost wide" style={{ marginBottom: 12 }} onClick={() => setAll(a => !a)}>{all ? 'Show current jobs only' : 'Show all jobs, including finished'}</button>
       {shown.length === 0 && <p className="muted small">No jobs yet.</p>}
       {shown.map(j => (
@@ -20,6 +21,7 @@ export function JobListPage() {
           <span className="small muted" style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>{j.data.start ? `Starts ${shortDate(j.data.start)}` : 'No start date'}</span>
         </div>
       ))}
+      </section>
     </main>
   )
 }
