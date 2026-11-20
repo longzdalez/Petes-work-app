@@ -28,6 +28,7 @@ import { startReminders } from './reminders'
 import AlarmPopup from './AlarmPopup'
 // Loaded after every page so the slick look sits on top
 import './theme3d.css'
+import './quick-colours.css'
 
 function App() {
   const r = useRoute()

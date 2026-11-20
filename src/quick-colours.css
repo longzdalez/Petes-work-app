@@ -1,0 +1,6 @@
+/* Five quick buttons: each a different mix of brand green, orange and white */
+.quick button:nth-child(1) .q-ic { background: linear-gradient(180deg, #ffb066, #ff8a2b 60%, #f07010); color: #fff; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .1), 0 3px 0 #c75c08, 0 10px 18px -6px rgba(255, 138, 43, .6); }
+.quick button:nth-child(2) .q-ic { background: linear-gradient(180deg, #38d68b, #17a262 60%, #108a52); color: #fff; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .1), 0 3px 0 #0d6e43, 0 10px 18px -6px rgba(18, 138, 85, .55); }
+.quick button:nth-child(3) .q-ic { background: linear-gradient(180deg, #fff, #f3f8f5); color: #ff8a2b; box-shadow: inset 0 0 0 3px #19a463, inset 0 -3px 0 rgba(14, 74, 51, .06), 0 3px 0 #0d6e43, 0 10px 18px -8px rgba(18, 138, 85, .4); }
+.quick button:nth-child(4) .q-ic { background: linear-gradient(135deg, #2bc077 0%, #17a262 49%, #ff9a45 51%, #ff8a2b 100%); color: #fff; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .1), 0 3px 0 #9a6a2a, 0 10px 18px -6px rgba(14, 74, 51, .45); }
+.quick button:nth-child(5) .q-ic { background: linear-gradient(180deg, #fff, #fff6ee); color: #17a262; box-shadow: inset 0 0 0 3px #ff8a2b, inset 0 -3px 0 rgba(14, 74, 51, .06), 0 3px 0 #c75c08, 0 10px 18px -8px rgba(255, 138, 43, .45); }
