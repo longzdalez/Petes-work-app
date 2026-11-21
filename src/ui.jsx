@@ -180,7 +180,7 @@ export function MonthCalendar({ items = [], onDay, range, compact, month, setMon
   const maxShow = compact ? 2 : 4
   return (
     <div className={'cal' + (compact ? ' compact' : '')}
-      onTouchStart={e => { touch.current = [e.touches[0].clientX, e.touches[0].clientY] }}
+      onTouchStart={e => { touch.current = e.currentTarget.closest('.pview') ? null : [e.touches[0].clientX, e.touches[0].clientY] }}
       onTouchEnd={e => {
         if (!touch.current) return
         const dx = e.changedTouches[0].clientX - touch.current[0]
@@ -236,36 +236,30 @@ export function PromptSheet({ open, title, label, initial = '', placeholder, onS
   )
 }
 
-// Swipe right to tick, swipe left to show delete
-export function SwipeRow({ onTick, onDelete, children, className = '' }) {
-  const start = useRef(null)
-  const [dx, setDx] = useState(0)
-  const [open, setOpen] = useState(false)
-  const end = () => {
-    if (dx > 70 && onTick) { vibrate(); onTick() }
-    if (dx < -60 && onDelete) setOpen(true)
-    else if (dx > -10) setOpen(false)
-    setDx(0); start.current = null
-  }
+// A list row you press and hold for its options: tick, edit or delete.
+// (Replaced swipe-to-delete, so swiping across the screen only ever turns the page.)
+export function HoldRow({ onTick, onEdit, onDelete, done, title = 'This item', children, className = '' }) {
+  const [menu, setMenu] = useState(false)
+  const held = useRef(false)
+  const lp = useLongPress(() => { held.current = true; setMenu(true) }, null)
+  const pick = fn => { setMenu(false); fn() }
   return (
-    <div className={'swipe ' + className}>
-      <div className="swipe-bg tick-bg"><Icon name="check" size={20} stroke={3} /></div>
-      {onDelete && <button className="swipe-bg del-bg" onClick={() => { setOpen(false); onDelete() }}><Icon name="trash" size={20} /> Delete</button>}
-      <div className="swipe-front" style={{ transform: open || dx ? `translateX(${open ? -96 : dx}px)` : undefined, transition: start.current ? 'none' : 'transform .2s' }}
-        onTouchStart={e => { start.current = [e.touches[0].clientX, e.touches[0].clientY, false] }}
-        onTouchMove={e => {
-          if (!start.current) return
-          const x = e.touches[0].clientX - start.current[0], y = e.touches[0].clientY - start.current[1]
-          if (!start.current[2] && Math.abs(y) > Math.abs(x)) { start.current = null; return }
-          if (Math.abs(x) > 8) start.current[2] = true
-          if (start.current[2]) setDx(Math.max(onDelete ? -110 : 0, Math.min(onTick ? 110 : 0, x + (open ? -96 : 0))))
-        }}
-        onTouchEnd={end} onClick={() => open && setOpen(false)}>
+    <div className={'swipe hold ' + className}>
+      <div className="swipe-front" {...lp} onPointerDown={e => { held.current = false; lp.onPointerDown(e) }}
+        onClickCapture={e => { if (held.current) { e.stopPropagation(); e.preventDefault(); held.current = false } }}>
         {children}
       </div>
+      <Sheet open={menu} onClose={() => setMenu(false)} title={title}>
+        <div className="hold-menu">
+          {onTick && <button className="btn ghost wide" onClick={() => pick(onTick)}><Icon name="check" size={18} stroke={2.6} /> {done ? 'Untick' : 'Tick off'}</button>}
+          {onEdit && <button className="btn ghost wide" onClick={() => pick(onEdit)}><Icon name="edit" size={18} /> Edit</button>}
+          {onDelete && <button className="btn danger wide" onClick={() => pick(onDelete)}><Icon name="trash" size={18} /> Delete</button>}
+        </div>
+      </Sheet>
     </div>
   )
 }
+export const SwipeRow = HoldRow
 
 // Finger signature box. onChange gets a PNG data URL.
 export function SignaturePad({ onDone, onCancel, who = 'Client' }) {
