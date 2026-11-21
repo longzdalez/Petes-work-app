@@ -144,7 +144,7 @@ function MaterialRow({ m, autoFocus, onEnter }) {
   const sub = [m.data.qty && `x ${m.data.qty}`, m.data.supplier, num(m.data.price) ? money(num(m.data.price)) : ''].filter(Boolean).join(' · ')
   const tick = () => update(m.id, { done: !m.data.done, doneOn: !m.data.done ? new Date().toISOString().slice(0, 10) : '' })
   return (
-    <SwipeRow onTick={tick} onDelete={() => removeWithUndo(m.id, m.data.name || 'Material')}>
+    <SwipeRow title={m.data.text || 'Material'} done={m.data.done} onTick={tick} onEdit={() => setPick(true)} onDelete={() => removeWithUndo(m.id, m.data.text || 'Material')}>
       <div className={'mat-row' + (m.data.done ? ' done' : '')} style={{ width: '100%' }}>
         <button className={'tick' + (m.data.done ? ' on' : '')} onClick={tick} aria-label="Tick off">
           {m.data.done && <Icon name="check" size={16} stroke={3} />}
@@ -268,7 +268,7 @@ export function Folder({ id, fid }) {
         {sorted.map(m => <MaterialRow key={m.id} m={m} autoFocus={m.id === focusId} onEnter={add} />)}
         <button className="add-line" onClick={add}><Icon name="plus" size={18} /> Add item</button>
       </div>
-      <p className="hint">Tick an item once it's ordered, or swipe right. Swipe left to delete. Tap the colour box for urgency, quantity, supplier and price.</p>
+      <p className="hint">Tick an item once it's ordered. Hold an item to edit or delete it. Tap the colour box for urgency, quantity, supplier and price.</p>
       {ordering && <OrderSheet job={job} folder={folder} rows={rows} onClose={() => setOrdering(false)} />}
     </JobShell>
   )
