@@ -87,7 +87,6 @@ export function TodoEditSheet({ todo, onClose }) {
 function TodoRow({ td, onEdit }) {
   const t = today()
   const toggle = () => update(td.id, { done: !td.data.done, doneOn: t })
-  const lp = useLongPress(() => onEdit(td.id), null)
   const [pick, setPick] = useState(false)
   const [rem, setRem] = useState(false)
   const d = td.data
@@ -95,9 +94,9 @@ function TodoRow({ td, onEdit }) {
   const u = URGENCY[d.urgency]
   const when = d.date && d.date !== t ? (d.date < t ? `from ${shortDate(d.date)}` : shortDate(d.date)) : ''
   return (
-    <SwipeRow className={d.done ? 'done' : ''} onTick={toggle} onDelete={() => removeWithUndo(td.id, 'To-do')}>
+    <SwipeRow className={d.done ? 'done' : ''} title={d.text || 'To-do'} done={d.done} onTick={toggle} onEdit={() => onEdit(td.id)} onDelete={() => removeWithUndo(td.id, 'To-do')}>
       <button className={'tick' + (d.done ? ' on' : '')} onClick={toggle} aria-label="Tick">{d.done && <Icon name="check" size={16} stroke={3} />}</button>
-      <span className="text todo-text" {...lp}>
+      <span className="text todo-text">
         {d.text}
         {(when || d.time) && <span className={'todo-when' + (d.date < t && !d.done ? ' overdue' : '')}>{[when, d.time].filter(Boolean).join(' · ')}</span>}
         {remindOn && <span className="todo-remind"><Icon name="bell" size={12} /> {niceRemind(d.remind)}</span>}
@@ -148,11 +147,11 @@ export function TodoList({ jobId, title = 'To-do', showCalendar = true, kind = '
         <span className="small muted">Job</span>
         <select value={forJob} onChange={e => setForJob(e.target.value)} aria-label="Assign to a job"><option value="">General (no job)</option>{jobsList.map(j => <option key={j.id} value={j.id}>{j.data.name || 'Untitled job'}</option>)}</select>
       </div>}
-      {shown.length > 0 && <p className="hint" style={{ margin: '10px 0 0' }}>Hold a to-do to change it, or tap the pencil. Tap the bell to set a reminder. Swipe right to tick, left to delete.</p>}
+      {shown.length > 0 && <p className="hint" style={{ margin: '10px 0 0' }}>Hold a to-do to tick, edit or delete it, or tap the pencil. Tap the bell to set a reminder.</p>}
       {showCalendar && <button className="btn ghost wide" style={{ marginTop: 12 }} onClick={() => setBig(true)}><Icon name="schedule" size={18} /> Open to-do calendar</button>}
       <Sheet open={big} onClose={() => setBig(false)} title={`${title} calendar`} full>
         <MonthCalendar items={items} month={month} setMonth={setMonth} onDay={setDay} />
-        <p className="hint">Swipe to change month. Tap a day to see or add to-dos.</p>
+        <p className="hint">Use the arrows to change month. Tap a day to see or add to-dos.</p>
       </Sheet>
       {day && <DaySheet date={day} todos={all.filter(r => r.data.date === day)} onAdd={txt => add(txt, day)} onEdit={setEdit} onClose={() => setDay(null)} />}
       <TodoEditSheet todo={editTodo} onClose={() => setEdit(null)} />
