@@ -1,0 +1,14 @@
+/* Whole-screen page swipe: no animation while the finger is down, a smooth settle after */
+html, body { overscroll-behavior-x: none; }
+.pview { touch-action: pan-y; }
+.pview-track.dragging { transition: none; }
+/* Press-and-hold rows: a gentle squeeze while holding */
+.swipe.hold .swipe-front { transition: transform .25s var(--spring), background .2s; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.swipe.hold .swipe-front:active { transform: scale(.985); background: #f2faf5; }
+.swipe.hold .swipe-front input { user-select: text; -webkit-user-select: text; }
+.hold-menu { display: grid; gap: 10px; padding-bottom: 6px; }
+.hold-menu .btn { min-height: 54px; font-size: 16px; justify-content: flex-start; padding-left: 18px; }
+/* Job pager dots: bigger to tap, now that swiping turns the home page */
+.jdots { gap: 12px; padding: 6px 0; }
+.jdots button { width: 12px; height: 12px; padding: 0; position: relative; }
+.jdots button::after { content: ''; position: absolute; inset: -10px; }

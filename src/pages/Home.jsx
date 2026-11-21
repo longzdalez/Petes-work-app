@@ -24,8 +24,9 @@ import { JobCalendar } from './Calendar'
 import QuickMoney, { SavedToast } from '../QuickMoney'
 import '../home-pager.css'
 import '../home-calendar.css'
+import '../gestures.css'
 
-// The home pages, switched only from the swipe bar so swiping a list never turns the page
+// The home pages. Swipe anywhere on the page to turn it, or scroll the bar and tap a tab to jump straight there
 const PAGE_TABS = ['Today', 'To-do', 'To Get', 'Money', 'Job list', 'Materials', 'Owed', 'Calendar', 'Contacts', 'Jobs']
 
 export function JobDetailsSheet({ job, onClose }) {
@@ -196,21 +197,24 @@ export function FinishedJobs() {
 // Whose phone this is (Pete or Brian), chosen in Settings. Defaults to the first owner.
 export const mePhone = owners => localStorage.getItem('pw_me') || owners[0] || 'Pete'
 
+// True if the finger landed on a strip that scrolls sideways by itself (so it scrolls instead of turning the page)
+function scrollsSideways(el, stop) {
+  for (let n = el; n && n !== stop; n = n.parentElement) {
+    if (n.scrollWidth > n.clientWidth + 2) { const o = getComputedStyle(n).overflowX; if (o === 'auto' || o === 'scroll') return true }
+  }
+  return false
+}
+
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
 
-// Live jobs four to a page, swiped left and right
+// Live jobs four to a page; tap the dots to see the next four
 function JobPager({ jobs, onLong }) {
   const [page, setPage] = useState(0)
-  const x = useRef(0)
   const pages = []
   for (let i = 0; i < jobs.length; i += 4) pages.push(jobs.slice(i, i + 4))
   const cur = Math.min(page, Math.max(0, pages.length - 1))
-  const end = e => {
-    const dx = e.changedTouches[0].clientX - x.current
-    if (Math.abs(dx) > 40) setPage(Math.max(0, Math.min(pages.length - 1, cur + (dx < 0 ? 1 : -1))))
-  }
   return (
-    <div className="jpager" onTouchStart={e => { x.current = e.touches[0].clientX }} onTouchEnd={end}>
+    <div className="jpager">
       <div className="jtrack" style={{ transform: `translateX(-${cur * 100}%)` }}>
         {pages.map((pg, i) => <div className="jpage" key={i}>{pg.map(j => <JobCard key={j.id} job={j} onLong={onLong} />)}</div>)}
       </div>
@@ -227,11 +231,31 @@ export default function Home() {
   const [page, setPage] = useState(0)
   const barRef = useRef(null)
   useEffect(() => { barRef.current?.querySelector('.pb.on')?.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' }) }, [page])
-  const swipeX = useRef(0)
-  const swipeStart = e => { swipeX.current = e.touches[0].clientX }
-  const swipeEnd = e => {
-    const dx = e.changedTouches[0].clientX - swipeX.current
-    if (Math.abs(dx) > 40) setPage(p => Math.max(0, Math.min(PAGE_TABS.length - 1, p + (dx < 0 ? 1 : -1))))
+  // Whole-screen swipe: the page follows the finger, then settles on the next or previous tab
+  const drag = useRef(null)
+  const track = useRef(null)
+  const setDx = x => { const el = track.current; if (!el) return; el.classList.toggle('dragging', !!x); el.style.transform = `translateX(calc(${-page * 100}% + ${x}px))` }
+  const onTouchStart = e => {
+    const t = e.target
+    if (t.closest('input, textarea, select, [data-noswipe]') || scrollsSideways(t, e.currentTarget)) { drag.current = null; return }
+    drag.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, lock: null, w: e.currentTarget.clientWidth }
+  }
+  const onTouchMove = e => {
+    const d = drag.current; if (!d) return
+    const x = e.touches[0].clientX - d.x, y = e.touches[0].clientY - d.y
+    if (!d.lock && Math.hypot(x, y) > 10) d.lock = Math.abs(x) > Math.abs(y) * 1.2 ? 'x' : 'y'
+    if (d.lock !== 'x') return
+    const edge = (page === 0 && x > 0) || (page === PAGE_TABS.length - 1 && x < 0)
+    setDx(edge ? x / 4 : x)
+  }
+  const onTouchEnd = e => {
+    const d = drag.current; drag.current = null
+    if (!d || d.lock !== 'x') return
+    const x = e.changedTouches[0].clientX - d.x
+    const next = Math.abs(x) > Math.min(80, d.w * 0.2) ? Math.max(0, Math.min(PAGE_TABS.length - 1, page + (x < 0 ? 1 : -1))) : page
+    track.current.classList.remove('dragging')
+    track.current.style.transform = `translateX(${-next * 100}%)`
+    setPage(next)
   }
   const [ordering, setOrdering] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -261,7 +285,8 @@ export default function Home() {
         </div>
         <div className="hh-greet">{greeting()}{settings.owners[0] ? `, ${mePhone(settings.owners)}` : ''}</div>
       </header>
-      <div className="pview"><div className="pview-track" style={{ transform: `translateX(-${page * 100}%)` }}>
+      <div className="pview" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={() => { drag.current = null; setDx(0) }}>
+      <div className="pview-track" ref={track} style={{ transform: `translateX(${-page * 100}%)` }}>
         <section className="pview-page">
         <div className="quick">
           <button onClick={scan}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
@@ -322,7 +347,7 @@ export default function Home() {
         </main>
         </section>
       </div></div>
-      <nav className="pbar" ref={barRef} onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
+      <nav className="pbar" ref={barRef}>
         {PAGE_TABS.map((n, i) => <button key={n} className={'pb pb' + i + (page === i ? ' on' : '')} onClick={() => setPage(i)}>{n}</button>)}
       </nav>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
