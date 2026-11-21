@@ -290,7 +290,7 @@ export default function Home() {
         <section className="pview-page">
         <div className="quick">
           <button onClick={scan}><span className="q-ic orange"><Icon name="receipt" size={24} /></span>Scan receipt</button>
-          <button onClick={() => setQm({})}><span className="q-ic green"><Icon name="money" size={24} /></span>{`Paid ${mePhone(settings.owners)}`}</button>
+          <button onClick={() => setQm({})} aria-label="Add money in or out"><span className="q-ic green"><Icon name="money" size={24} /></span>£</button>
           <button onClick={() => setCar(true)} aria-label="Vehicle costs: ULEZ, congestion, fuel, tickets"><span className="q-ic white"><CarIcon /></span>Car</button>
           <button onClick={() => setAdding(true)}><span className="q-ic white"><Icon name="plus" size={24} /></span>New job</button>
           <button onClick={() => setPage(1)}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
