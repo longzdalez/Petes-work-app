@@ -18,7 +18,6 @@ import { GeneralCashFlow } from './CashFlow'
 import { MoneyCentreCard } from './MoneyCentre'
 import { MaterialsAllJobs } from './MaterialsAll'
 import { JobListPage } from './JobList'
-import { OwedPage } from './Owed'
 import { VehicleSheet, CarIcon } from '../Vehicle'
 import { JobCalendar } from './Calendar'
 import QuickMoney, { SavedToast } from '../QuickMoney'
@@ -27,7 +26,9 @@ import '../home-calendar.css'
 import '../gestures.css'
 
 // The home pages. Swipe anywhere on the page to turn it, or scroll the bar and tap a tab to jump straight there
-const PAGE_TABS = ['Today', 'To-do', 'To Get', 'Money', 'Job list', 'Materials', 'Owed', 'Calendar', 'Contacts', 'Jobs']
+const PAGE_TABS = ['Today', 'To-do', 'To Get', 'Money', 'Job list', 'Materials', 'Jobs', 'Calendar', 'Contacts']
+// Each tab keeps its own colour dot wherever it sits on the bar
+const TAB_COLOUR = { Today: 0, 'To-do': 1, 'To Get': 2, Money: 3, 'Job list': 4, Materials: 5, Calendar: 7, Contacts: 8, Jobs: 9 }
 
 export function JobDetailsSheet({ job, onClose }) {
   if (!job) return null
@@ -315,15 +316,6 @@ export default function Home() {
           <MaterialsAllJobs />
         </section>
         <section className="pview-page">
-          <OwedPage />
-        </section>
-        <section className="pview-page">
-          <JobCalendar />
-        </section>
-        <section className="pview-page">
-          <ContactsBox />
-        </section>
-        <section className="pview-page">
         <main className="content home-content home-jobs-page">
         <div className="section-head">
           <h2>Jobs</h2>
@@ -346,9 +338,15 @@ export default function Home() {
         </button>}
         </main>
         </section>
+        <section className="pview-page">
+          <JobCalendar />
+        </section>
+        <section className="pview-page">
+          <ContactsBox />
+        </section>
       </div></div>
       <nav className="pbar" ref={barRef}>
-        {PAGE_TABS.map((n, i) => <button key={n} className={'pb pb' + i + (page === i ? ' on' : '')} onClick={() => setPage(i)}>{n}</button>)}
+        {PAGE_TABS.map((n, i) => <button key={n} className={'pb pb' + TAB_COLOUR[n] + (page === i ? ' on' : '')} onClick={() => setPage(i)}>{n}</button>)}
       </nav>
       <JobDetailsSheet job={editJob} onClose={() => setEditing(null)} />
       <NewJobSheet open={adding} onClose={() => setAdding(false)} />
