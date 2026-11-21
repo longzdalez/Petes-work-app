@@ -1,24 +1,41 @@
-// One sheet for any money in or out: amount first, then tap the job, type and who paid.
-// Opens straight from the home page, so there's no "pick a job, then open its Money page" step.
-// Smart defaults: the last job used, this phone's owner as payer, today's date.
+// The £ form: one simple sheet for any money in or out, used from the home page, the Money centre
+// and for catching up on payments from before the app.
+//   Money in:  Payment to Pete / Payment to Brian (client money into their account, set against them in the 50/50)
+//   Money out: Subcontractor / Materials / Vehicle / Miscellaneous, each marked B or P for who paid
+// Every entry has a description, a date and (optionally) a job.
 import { useEffect, useRef, useState } from 'react'
-import { put, remove, list, useList } from './store'
+import { put, remove, removeWithUndo, list, useList } from './store'
 import { Icon, Sheet, Suggest } from './ui'
 import { money, num, today, ymd, shortDate, vibrate } from './util'
 import { storeFile, pickFile } from './files'
 import { readReceipt } from './receipt'
 import { PayerToggle } from './Vehicle'
+import { useSettings } from './pages/Settings'
 import { isLocked, lockMsg, findDuplicate } from './ledger'
 import { jobStatus } from './jobs'
+import './money-form.css'
 
-const CATS = {
-  in: [['client', 'Client payment'], ['other', 'Other']],
-  out: [['materials', 'Materials'], ['contractor', 'Subcontractor'], ['wages', 'Wages'], ['other', 'Misc']],
-}
-const LAST_JOB = 'pw_qm_job'
+const OUT_OPTIONS = [
+  ['contractor', 'Payment to subcontractor', 'Who paid, and who it went to'],
+  ['materials', 'Materials payment', 'Timber, blocks, fixings, tools for the job'],
+  ['vehicle', 'Vehicle payment', 'Fuel, ULEZ, congestion, repairs, tickets'],
+  ['other', 'Miscellaneous', 'Anything else'],
+]
+const OLD_CATS = { wages: 'Wages', client: 'Client payment', repeat: 'Repeat payment' }
 const NO_JOB = 'none'
 const yesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return ymd(d) }
-const lastJob = () => { try { return localStorage.getItem(LAST_JOB) || '' } catch { return '' } }
+
+// The choices under "What for?" for money in or out
+export function whatOptions(dir, owners) {
+  return dir === 'in'
+    ? owners.map(n => [`to:${n}`, `Payment to ${n}`, 'Set against the 50/50 split'])
+    : OUT_OPTIONS.map(o => [...o])
+}
+// The "What for?" label for a saved payment
+export function whatLabel(d) {
+  if (d.dir === 'in') return d.against || d.payer ? `Payment to ${d.against || d.payer}` : 'Money in'
+  return OUT_OPTIONS.find(o => o[0] === d.cat)?.[1] || OLD_CATS[d.cat] || 'Money out'
+}
 
 // Jobs on the go, the ones with the most recent money first
 function useLiveJobs() {
@@ -28,136 +45,160 @@ function useLiveJobs() {
   return jobs.sort((a, b) => (lastUse[b.id] || b.data.created || '').localeCompare(lastUse[a.id] || a.data.created || ''))
 }
 
-// The descriptions used most often, so a repeat payment is one tap
-function topDescs(dir) {
-  const n = {}
-  list('money', m => m.data.dir === dir && m.data.desc).forEach(m => { const k = m.data.desc.trim(); n[k] = (n[k] || 0) + 1 })
-  return Object.entries(n).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => k)
-}
-
-export default function QuickMoney({ start, onClose, onSaved }) {
+// start: { data } to pre-fill, { id, data, job_id } to change a saved payment, { file } to read a receipt, { catchup: true } for an earlier payment
+export default function QuickMoney({ start = {}, onClose, onSaved }) {
+  const { owners } = useSettings()
   const jobs = useLiveJobs()
-  const firstJob = () => { const l = lastJob(); return l === NO_JOB || jobs.some(j => j.id === l) ? l : (jobs[0]?.id || NO_JOB) }
-  const blank = () => ({ dir: 'out', cat: 'materials', amount: '', desc: '', person: '', payer: '', date: today(), status: 'paid', job: firstJob(), receipt: null, vat: '' })
-  const [d, setD] = useState(() => ({ ...blank(), ...(start?.data || {}) }))
+  const editing = !!start.id
+  const scan = !!start.file
+  const [d, setD] = useState(() => {
+    const s = start.data || {}
+    const dir = s.dir || 'out'
+    const what = dir === 'in' ? (s.against || s.payer ? `to:${s.against || s.payer}` : '') : (s.cat || '')
+    return {
+      dir, what, amount: s.amount ? String(s.amount) : '', desc: s.desc || '', payer: dir === 'out' ? (s.payer || '') : '',
+      date: s.date === '' && start.catchup ? '' : (s.date || today()), job: start.job_id || NO_JOB, receipt: s.receipt || null, vat: s.vat ? String(s.vat) : '',
+    }
+  })
+  const [picking, setPicking] = useState(!d.what && !scan)
+  const [showJobs, setShowJobs] = useState(scan || d.job !== NO_JOB)
   const [busy, setBusy] = useState('')
   const [read, setRead] = useState('')
-  const [more, setMore] = useState(false)
   const amountRef = useRef(null)
   const set = p => setD(x => ({ ...x, ...p }))
-  const job = jobs.find(j => j.id === d.job)
-  const scan = !!start?.file
+  const job = jobs.find(j => j.id === d.job) || (d.job !== NO_JOB ? list('job').find(j => j.id === d.job) : null)
+  const opts = whatOptions(d.dir, owners)
+  const chosen = opts.find(o => o[0] === d.what) || (d.what && OLD_CATS[d.what] ? [d.what, OLD_CATS[d.what], ''] : null)
+  const isIn = d.dir === 'in'
 
   // Read a receipt photo: fills in the amount, VAT, shop and date where it can
   const readFile = async f => {
     setBusy('Saving the photo…')
-    const st = await storeFile(f, `${d.job && d.job !== NO_JOB ? d.job : 'general'}/receipts`)
+    const st = await storeFile(f, `${d.job !== NO_JOB ? d.job : 'general'}/receipts`)
     set({ receipt: { path: st.path, thumb: st.thumb }, dir: 'out' })
     try {
       const r = await readReceipt(f, setBusy)
       setD(x => ({ ...x, amount: x.amount || (r.total ? r.total.toFixed(2) : ''), vat: x.vat || (r.vat ? r.vat.toFixed(2) : ''), desc: x.desc || r.shop || '', date: r.date || x.date }))
-      setRead(r.total ? `Read ${money(r.total)}${r.vat ? ` (VAT ${money(r.vat)})` : ''} from the receipt. Check it, pick the job and save.` : "Couldn't read the total. Please type it in.")
+      setRead(r.total ? `Read ${money(r.total)}${r.vat ? ` (VAT ${money(r.vat)})` : ''} from the receipt. Check it, then pick what it was for.` : "Couldn't read the total. Please type it in.")
     } catch { setRead("Couldn't read the receipt. Please type the amount in.") }
     setBusy('')
+    setPicking(true)
   }
-  useEffect(() => { if (start?.file) readFile(start.file); else setTimeout(() => amountRef.current?.focus(), 350) }, [])
+  useEffect(() => { if (scan) readFile(start.file); else if (!editing) setTimeout(() => amountRef.current?.focus(), 350) }, [])
+
+  const switchDir = dir => { if (dir !== d.dir) { set({ dir, what: '', payer: '', receipt: dir === 'in' ? null : d.receipt }); setPicking(true) } }
+  const pick = k => { set({ what: k }); setPicking(false) }
 
   const save = again => {
     const amount = num(d.amount)
     if (!amount) { amountRef.current?.focus(); return alert('Please put in an amount') }
-    if (!d.payer) return alert(d.dir === 'in' ? 'Tap B or P to say whose account it went into' : 'Tap B or P to say who paid')
+    if (!d.what) { setPicking(true); return alert('Please choose what it was for') }
+    if (!isIn && !d.payer) return alert('Tap B or P to say who paid')
+    if (!d.date) return alert('Please pick the date it was paid')
     if (isLocked(d.date)) return alert(lockMsg(d.date))
-    const desc = d.desc.trim() || (d.dir === 'in' ? (d.cat === 'client' ? 'Client payment' : 'Money in') : CATS.out.find(c => c[0] === d.cat)?.[1] || 'Payment')
-    const dup = findDuplicate({ amount, desc, date: d.date })
-    if (dup && !confirm(`This looks like a payment already saved: ${dup.data.desc || 'no description'}, ${money(dup.data.amount)} on ${shortDate(dup.data.date)}. Save it anyway?`)) return
-    const data = { dir: d.dir, cat: d.cat, amount, desc, date: d.date, status: d.status, payer: d.payer }
-    if (d.dir === 'in') { data.against = d.payer; data.person = d.person.trim() || job?.data.client || '' }
-    if (d.dir === 'out' && d.cat === 'wages') data.person = d.person || d.payer
-    if (d.dir === 'out' && d.cat === 'contractor') data.person = d.person.trim()
-    if (d.dir === 'out' && d.receipt) data.receipt = d.receipt
-    if (d.dir === 'out' && num(d.vat)) data.vat = num(d.vat)
-    const rec = put('money', data, { job_id: d.job === NO_JOB ? null : d.job })
-    try { localStorage.setItem(LAST_JOB, d.job) } catch { }
+    const desc = d.desc.trim() || chosen?.[1] || (isIn ? 'Money in' : 'Money out')
+    if (!editing) {
+      const dup = findDuplicate({ amount, desc, date: d.date })
+      if (dup && !confirm(`This looks like a payment already saved: ${dup.data.desc || 'no description'}, ${money(dup.data.amount)} on ${shortDate(dup.data.date)}. Save it anyway?`)) return
+    }
+    let data
+    if (isIn) {
+      const who = d.what.slice(3)
+      data = { dir: 'in', cat: 'client', amount, desc, date: d.date, status: 'paid', payer: who, against: who, person: '' }
+    } else {
+      data = { dir: 'out', cat: d.what, amount, desc, date: d.date, status: 'paid', payer: d.payer, person: d.what === 'contractor' ? desc : '' }
+      if (d.receipt) data.receipt = d.receipt
+      if (num(d.vat)) data.vat = num(d.vat)
+    }
+    if (start.catchup || start.data?.catchup) data.catchup = true
+    const job_id = d.job === NO_JOB ? null : d.job
+    let id = start.id
+    if (editing) put('money', { ...data, receipt: data.receipt || null, vat: data.vat || null }, { id: start.id, job_id })
+    else id = put('money', data, { job_id }).id
     vibrate(20)
-    onSaved && onSaved({ id: rec.id, text: `${d.dir === 'in' ? '+' : '−'}${money(amount)} · ${job ? job.data.name : scan ? 'Miscellaneous' : 'No job'}` })
-    if (again) { setD(x => ({ ...blank(), dir: x.dir, cat: x.cat, job: x.job, date: x.date })); setRead(''); setTimeout(() => amountRef.current?.focus(), 50) }
+    onSaved && onSaved({ id, undo: !editing, text: `${isIn ? '+' : '−'}${money(amount)} · ${chosen?.[1] || desc}` })
+    if (again) { setD(x => ({ ...x, amount: '', desc: '', payer: '', what: x.what, receipt: null, vat: '' })); setRead(''); setTimeout(() => amountRef.current?.focus(), 50) }
     else onClose()
   }
+  const del = () => { removeWithUndo(start.id, d.desc || 'Payment'); onClose() }
 
-  const descs = topDescs(d.dir)
-  const dateChip = d.date === today() ? 'today' : d.date === yesterday() ? 'yesterday' : 'other'
+  const dateChip = !d.date ? '' : d.date === today() ? 'today' : d.date === yesterday() ? 'yesterday' : 'other'
+  const title = editing ? 'Change payment' : start.catchup ? 'Earlier payment' : isIn ? 'Money in' : 'Money out'
   return (
-    <Sheet open onClose={onClose} title={d.dir === 'in' ? 'Money in' : 'Money out'}>
+    <Sheet open onClose={onClose} title={title}>
+      {start.catchup && !editing && <p className="small muted" style={{ marginTop: 0 }}>A payment from before you used the app. Put in the date it was paid and it counts towards the 50/50 from then.</p>}
       <div className="seg">
-        <button className={d.dir === 'out' ? 'on out' : ''} onClick={() => set({ dir: 'out', cat: 'materials' })}>Money out</button>
-        <button className={d.dir === 'in' ? 'on in' : ''} onClick={() => set({ dir: 'in', cat: 'client', receipt: null })}>Money in</button>
+        <button className={!isIn ? 'on out' : ''} onClick={() => switchDir('out')}>Money out</button>
+        <button className={isIn ? 'on in' : ''} onClick={() => switchDir('in')}>Money in</button>
       </div>
 
       <label className={'qm-amount ' + d.dir}>
         <span>£</span>
         <input ref={amountRef} inputMode="decimal" value={d.amount} placeholder="0.00" aria-label="Amount in pounds" style={{ width: `${Math.max(4, d.amount.length) + 0.5}ch` }}
-          onChange={e => set({ amount: e.target.value.replace(/[^\d.,]/g, '') })} onKeyDown={e => e.key === 'Enter' && save(false)} />
+          onChange={e => set({ amount: e.target.value.replace(/[^\d.,]/g, '') })} />
       </label>
 
-      <span className="qm-label">Job</span>
-      <div className="qm-scroll">
-        {scan && <button className={'chip' + (d.job === NO_JOB ? ' on' : '')} onClick={() => set({ job: NO_JOB, cat: 'other' })}>Miscellaneous</button>}
-        {jobs.map(j => <button key={j.id} className={'chip' + (d.job === j.id ? ' on' : '')} onClick={() => set({ job: j.id })}>{j.data.name || 'Untitled job'}</button>)}
-        {!scan && <button className={'chip' + (d.job === NO_JOB ? ' on' : '')} onClick={() => set({ job: NO_JOB })}>No job</button>}
-      </div>
+      <span className="qm-label">What for?</span>
+      {picking || !chosen ? (
+        <div className="qm-what-list" role="listbox" aria-label="What for?">
+          {opts.map(([k, l, hint]) => (
+            <button key={k} role="option" aria-selected={d.what === k} className={'qm-what' + (d.what === k ? ' on' : '') + (isIn ? ' in' : '')} onClick={() => pick(k)}>
+              <b>{l}</b><span>{hint}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <button className={'qm-what chosen' + (isIn ? ' in' : '')} onClick={() => setPicking(true)}>
+          <b>{chosen[1]}</b><span>{chosen[2] || 'Tap to change'}</span><Icon name="down" size={18} />
+        </button>
+      )}
 
-      <span className="qm-label">Type</span>
-      <div className="qm-scroll">
-        {CATS[d.dir].map(([k, l]) => <button key={k} className={'chip' + (d.cat === k ? ' on' : '')} onClick={() => set({ cat: k })}>{l}</button>)}
-      </div>
+      {chosen && !picking && <>
+        {!isIn && <div className="qm-who-row"><span>Who paid?</span><PayerToggle big value={d.payer} onChange={p => set({ payer: p })} /></div>}
 
-      <div className="qm-row">
-        <label className="field"><span>{d.dir === 'in' ? 'What for?' : d.cat === 'contractor' ? 'Who and what for?' : 'What for?'}</span>
-          <input value={d.desc} list="qm-desc" onChange={e => set({ desc: e.target.value })} placeholder={d.dir === 'in' ? 'e.g. Stage payment' : 'e.g. Timber from Jewson'} />
+        <label className="field"><span>Description</span>
+          <input value={d.desc} list="qm-desc" onChange={e => set({ desc: e.target.value })}
+            placeholder={isIn ? 'e.g. Stage 2 payment from Mrs Smith' : d.what === 'contractor' ? 'e.g. Dave the plasterer, 2 days' : d.what === 'vehicle' ? 'e.g. Diesel, van' : d.what === 'materials' ? 'e.g. Timber from Jewson' : 'What it was for'} />
         </label>
-        <label className="field qm-who"><span>{d.dir === 'in' ? 'Into' : 'Paid by'}</span><PayerToggle big value={d.payer} onChange={p => set({ payer: p })} /></label>
-      </div>
-      <Suggest id="qm-desc" values={list('money', m => m.data.dir === d.dir).map(m => m.data.desc)} />
-      {descs.length > 0 && !d.desc && <div className="qm-scroll" style={{ marginTop: -6 }}>
-        {descs.map(t => <button key={t} className="chip" onClick={() => set({ desc: t })}>{t}</button>)}
-      </div>}
+        <Suggest id="qm-desc" values={list('money', m => m.data.dir === d.dir && (isIn || m.data.cat === d.what)).map(m => m.data.desc)} />
 
-      <span className="qm-label">When</span>
-      <div className="qm-scroll">
-        <button className={'chip' + (dateChip === 'today' ? ' on' : '')} onClick={() => set({ date: today() })}>Today</button>
-        <button className={'chip' + (dateChip === 'yesterday' ? ' on' : '')} onClick={() => set({ date: yesterday() })}>Yesterday</button>
-        <label className={'chip' + (dateChip === 'other' ? ' on' : '')} style={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>
-          {dateChip === 'other' ? shortDate(d.date) : 'Pick a date'}
-          <input type="date" value={d.date} onChange={e => e.target.value && set({ date: e.target.value })} style={{ position: 'absolute', inset: 0, opacity: 0 }} aria-label="Pick a date" />
-        </label>
-        <button className={'chip' + (d.status === 'upcoming' ? ' on' : '')} onClick={() => set({ status: d.status === 'upcoming' ? 'paid' : 'upcoming' })}>{d.dir === 'in' ? 'Not in yet' : 'Not paid yet'}</button>
-      </div>
+        <span className="qm-label">Date paid</span>
+        <div className="qm-scroll">
+          <button className={'chip' + (dateChip === 'today' ? ' on' : '')} onClick={() => set({ date: today() })}>Today</button>
+          <button className={'chip' + (dateChip === 'yesterday' ? ' on' : '')} onClick={() => set({ date: yesterday() })}>Yesterday</button>
+          <label className={'chip' + (dateChip === 'other' ? ' on' : '')} style={{ display: 'inline-flex', alignItems: 'center', position: 'relative' }}>
+            {dateChip === 'other' ? shortDate(d.date) : 'Pick a date'}
+            <input type="date" value={d.date} onChange={e => e.target.value && set({ date: e.target.value })} style={{ position: 'absolute', inset: 0, opacity: 0 }} aria-label="Pick a date" />
+          </label>
+        </div>
 
-      {d.dir === 'out' && <button className="qm-photo" disabled={!!busy} onClick={async () => { const [f] = await pickFile({ accept: 'image/*,application/pdf' }); if (f) readFile(f) }}>
-        {d.receipt ? <img src={d.receipt.thumb} alt="" /> : <span className="q-badge"><Icon name="receipt" size={20} /></span>}
-        <span>{busy || (d.receipt ? 'Receipt added. Tap to swap it' : 'Add the receipt and I\'ll read it')}</span>
-      </button>}
+        {showJobs ? <>
+          <span className="qm-label">Job (optional)</span>
+          <div className="qm-scroll">
+            <button className={'chip' + (d.job === NO_JOB ? ' on' : '')} onClick={() => set({ job: NO_JOB })}>{scan ? 'Miscellaneous' : 'No job'}</button>
+            {jobs.map(j => <button key={j.id} className={'chip' + (d.job === j.id ? ' on' : '')} onClick={() => set({ job: j.id })}>{j.data.name || 'Untitled job'}</button>)}
+            {job && !jobs.some(j => j.id === job.id) && <button className="chip on">{job.data.name || 'Untitled job'}</button>}
+          </div>
+        </> : <button className="link-btn qm-jobs-link" onClick={() => setShowJobs(true)}>Link it to a job (optional)</button>}
+
+        {!isIn && <button className="qm-photo" disabled={!!busy} onClick={async () => { const [f] = await pickFile({ accept: 'image/*,application/pdf' }); if (f) readFile(f) }}>
+          {d.receipt ? <img src={d.receipt.thumb} alt="" /> : <span className="q-badge"><Icon name="receipt" size={20} /></span>}
+          <span>{busy || (d.receipt ? 'Receipt added. Tap to swap it' : 'Add a receipt photo (optional)')}</span>
+        </button>}
+      </>}
+      {busy && picking && <p className="notice small qm-read">{busy}</p>}
       {read && <p className="notice small qm-read">{read}</p>}
 
-      <button className="link-btn" onClick={() => setMore(m => !m)}>{more ? 'Fewer details' : 'More details'}</button>
-      {more && <div className="qm-more">
-        {d.dir === 'in' && <label className="field"><span>Who paid it?</span><input value={d.person} onChange={e => set({ person: e.target.value })} placeholder={job?.data.client || 'e.g. the client'} /></label>}
-        {d.dir === 'out' && d.cat === 'contractor' && <label className="field"><span>Subcontractor's name</span><input value={d.person} onChange={e => set({ person: e.target.value })} /></label>}
-        {d.dir === 'out' && <div className="qm-row">
-          <label className="field"><span>VAT included £</span><input inputMode="decimal" value={d.vat} onChange={e => set({ vat: e.target.value })} placeholder="0.00" /></label>
-          <button className="btn ghost" onClick={() => set({ vat: (num(d.amount) / 6).toFixed(2) })}>20% VAT</button>
-        </div>}
-      </div>}
-
-      <div className="qm-actions">
-        <button className="btn ghost" onClick={() => save(true)}>Save + next</button>
-        <button className={'btn ' + (d.dir === 'in' ? 'primary' : 'orange')} onClick={() => save(false)}><Icon name="check" size={20} stroke={2.6} /> Save {num(d.amount) ? money(num(d.amount)) : ''}</button>
+      <div className={'qm-actions' + (editing ? ' edit' : '')}>
+        {editing ? <button className="btn danger" onClick={del} aria-label="Delete this payment"><Icon name="trash" size={18} /> Delete</button>
+          : <button className="btn ghost" onClick={() => save(true)}>Save + next</button>}
+        <button className={'btn ' + (isIn ? 'primary' : 'orange')} onClick={() => save(false)}><Icon name="check" size={20} stroke={2.6} /> Save {num(d.amount) ? money(num(d.amount)) : ''}</button>
       </div>
     </Sheet>
   )
 }
 
-// "Saved" message with Undo, shown for a few seconds after a quick save
+// "Saved" message with Undo, shown for a few seconds after a save
 export function SavedToast({ saved, onDone }) {
   useEffect(() => { if (!saved) return; const t = setTimeout(onDone, 4500); return () => clearTimeout(t) }, [saved])
   if (!saved) return null
@@ -165,7 +206,7 @@ export function SavedToast({ saved, onDone }) {
     <div className="qm-done" role="status">
       <span className="tick"><Icon name="check" size={16} stroke={3} /></span>
       <span>Saved {saved.text}</span>
-      <button onClick={() => { remove(saved.id); onDone() }}>Undo</button>
+      {saved.undo !== false && <button onClick={() => { remove(saved.id); onDone() }}>Undo</button>}
     </div>
   )
 }
