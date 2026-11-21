@@ -2,6 +2,7 @@
 // and for catching up on payments from before the app.
 //   Money in:  Payment to Pete / Payment to Brian (client money into their account, set against them in the 50/50)
 //   Money out: Subcontractor / Materials / Vehicle / Miscellaneous, each marked B or P for who paid
+//   Between you: Pete paid Brian / Brian paid Pete (doesn't count as money in or out of the business)
 // Every entry has a description, a date and (optionally) a job.
 import { useEffect, useRef, useState } from 'react'
 import { put, remove, removeWithUndo, list, useList } from './store'
@@ -27,12 +28,13 @@ const yesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); retu
 
 // The choices under "What for?" for money in or out
 export function whatOptions(dir, owners) {
-  return dir === 'in'
-    ? owners.map(n => [`to:${n}`, `Payment to ${n}`, 'Set against the 50/50 split'])
-    : OUT_OPTIONS.map(o => [...o])
+  if (dir === 'in') return owners.map(n => [`to:${n}`, `Payment to ${n}`, 'Client money into their account, set against the 50/50'])
+  if (dir === 'between') return owners.flatMap(a => owners.filter(b => b !== a).map(b => [`pay:${a}>${b}`, `${a} paid ${b}`, 'Money sent from one of you to the other']))
+  return OUT_OPTIONS.map(o => [...o])
 }
 // The "What for?" label for a saved payment
 export function whatLabel(d) {
+  if (d.cat === 'transfer') return `${d.payer} paid ${d.person}`
   if (d.dir === 'in') return d.against || d.payer ? `Payment to ${d.against || d.payer}` : 'Money in'
   return OUT_OPTIONS.find(o => o[0] === d.cat)?.[1] || OLD_CATS[d.cat] || 'Money out'
 }
@@ -53,8 +55,9 @@ export default function QuickMoney({ start = {}, onClose, onSaved }) {
   const scan = !!start.file
   const [d, setD] = useState(() => {
     const s = start.data || {}
-    const dir = s.dir || 'out'
-    const what = dir === 'in' ? (s.against || s.payer ? `to:${s.against || s.payer}` : '') : (s.cat || '')
+    const dir = s.cat === 'transfer' || s.dir === 'between' ? 'between' : s.dir || 'out'
+    const what = dir === 'between' ? (s.payer && s.person ? `pay:${s.payer}>${s.person}` : '')
+      : dir === 'in' ? (s.against || s.payer ? `to:${s.against || s.payer}` : '') : (s.cat || '')
     return {
       dir, what, amount: s.amount ? String(s.amount) : '', desc: s.desc || '', payer: dir === 'out' ? (s.payer || '') : '',
       date: s.date === '' && start.catchup ? '' : (s.date || today()), job: start.job_id || NO_JOB, receipt: s.receipt || null, vat: s.vat ? String(s.vat) : '',
@@ -70,6 +73,8 @@ export default function QuickMoney({ start = {}, onClose, onSaved }) {
   const opts = whatOptions(d.dir, owners)
   const chosen = opts.find(o => o[0] === d.what) || (d.what && OLD_CATS[d.what] ? [d.what, OLD_CATS[d.what], ''] : null)
   const isIn = d.dir === 'in'
+  const isBetween = d.dir === 'between'
+  const isOut = d.dir === 'out'
 
   // Read a receipt photo: fills in the amount, VAT, shop and date where it can
   const readFile = async f => {
@@ -86,23 +91,26 @@ export default function QuickMoney({ start = {}, onClose, onSaved }) {
   }
   useEffect(() => { if (scan) readFile(start.file); else if (!editing) setTimeout(() => amountRef.current?.focus(), 350) }, [])
 
-  const switchDir = dir => { if (dir !== d.dir) { set({ dir, what: '', payer: '', receipt: dir === 'in' ? null : d.receipt }); setPicking(true) } }
+  const switchDir = dir => { if (dir !== d.dir) { set({ dir, what: '', payer: '', receipt: dir === 'out' ? d.receipt : null, job: dir === 'between' ? NO_JOB : d.job }); setPicking(true) } }
   const pick = k => { set({ what: k }); setPicking(false) }
 
   const save = again => {
     const amount = num(d.amount)
     if (!amount) { amountRef.current?.focus(); return alert('Please put in an amount') }
     if (!d.what) { setPicking(true); return alert('Please choose what it was for') }
-    if (!isIn && !d.payer) return alert('Tap B or P to say who paid')
+    if (isOut && !d.payer) return alert('Tap B or P to say who paid')
     if (!d.date) return alert('Please pick the date it was paid')
     if (isLocked(d.date)) return alert(lockMsg(d.date))
     const desc = d.desc.trim() || chosen?.[1] || (isIn ? 'Money in' : 'Money out')
-    if (!editing) {
+    if (!editing && !isBetween) {
       const dup = findDuplicate({ amount, desc, date: d.date })
       if (dup && !confirm(`This looks like a payment already saved: ${dup.data.desc || 'no description'}, ${money(dup.data.amount)} on ${shortDate(dup.data.date)}. Save it anyway?`)) return
     }
     let data
-    if (isIn) {
+    if (isBetween) {
+      const [from, to] = d.what.slice(4).split('>')
+      data = { dir: 'out', cat: 'transfer', amount, desc, date: d.date, status: 'paid', payer: from, person: to }
+    } else if (isIn) {
       const who = d.what.slice(3)
       data = { dir: 'in', cat: 'client', amount, desc, date: d.date, status: 'paid', payer: who, against: who, person: '' }
     } else {
@@ -111,25 +119,26 @@ export default function QuickMoney({ start = {}, onClose, onSaved }) {
       if (num(d.vat)) data.vat = num(d.vat)
     }
     if (start.catchup || start.data?.catchup) data.catchup = true
-    const job_id = d.job === NO_JOB ? null : d.job
+    const job_id = d.job === NO_JOB || isBetween ? null : d.job
     let id = start.id
     if (editing) put('money', { ...data, receipt: data.receipt || null, vat: data.vat || null }, { id: start.id, job_id })
     else id = put('money', data, { job_id }).id
     vibrate(20)
-    onSaved && onSaved({ id, undo: !editing, text: `${isIn ? '+' : '−'}${money(amount)} · ${chosen?.[1] || desc}` })
+    onSaved && onSaved({ id, undo: !editing, text: `${isIn ? '+' : isBetween ? '' : '−'}${money(amount)} · ${chosen?.[1] || desc}` })
     if (again) { setD(x => ({ ...x, amount: '', desc: '', payer: '', what: x.what, receipt: null, vat: '' })); setRead(''); setTimeout(() => amountRef.current?.focus(), 50) }
     else onClose()
   }
   const del = () => { removeWithUndo(start.id, d.desc || 'Payment'); onClose() }
 
   const dateChip = !d.date ? '' : d.date === today() ? 'today' : d.date === yesterday() ? 'yesterday' : 'other'
-  const title = editing ? 'Change payment' : start.catchup ? 'Earlier payment' : isIn ? 'Money in' : 'Money out'
+  const title = editing ? 'Change payment' : start.catchup ? 'Earlier payment' : isBetween ? 'Between you' : isIn ? 'Money in' : 'Money out'
   return (
     <Sheet open onClose={onClose} title={title}>
       {start.catchup && !editing && <p className="small muted" style={{ marginTop: 0 }}>A payment from before you used the app. Put in the date it was paid and it counts towards the 50/50 from then.</p>}
-      <div className="seg">
-        <button className={!isIn ? 'on out' : ''} onClick={() => switchDir('out')}>Money out</button>
-        <button className={isIn ? 'on in' : ''} onClick={() => switchDir('in')}>Money in</button>
+      <div className="seg qm-seg3">
+        <button className={isOut ? 'on out' : ''} onClick={() => switchDir('out')}>Out</button>
+        <button className={isIn ? 'on in' : ''} onClick={() => switchDir('in')}>In</button>
+        <button className={isBetween ? 'on' : ''} onClick={() => switchDir('between')}>Between you</button>
       </div>
 
       <label className={'qm-amount ' + d.dir}>
@@ -154,11 +163,11 @@ export default function QuickMoney({ start = {}, onClose, onSaved }) {
       )}
 
       {chosen && !picking && <>
-        {!isIn && <div className="qm-who-row"><span>Who paid?</span><PayerToggle big value={d.payer} onChange={p => set({ payer: p })} /></div>}
+        {isOut && <div className="qm-who-row"><span>Who paid?</span><PayerToggle big value={d.payer} onChange={p => set({ payer: p })} /></div>}
 
         <label className="field"><span>Description</span>
           <input value={d.desc} list="qm-desc" onChange={e => set({ desc: e.target.value })}
-            placeholder={isIn ? 'e.g. Stage 2 payment from Mrs Smith' : d.what === 'contractor' ? 'e.g. Dave the plasterer, 2 days' : d.what === 'vehicle' ? 'e.g. Diesel, van' : d.what === 'materials' ? 'e.g. Timber from Jewson' : 'What it was for'} />
+            placeholder={isBetween ? 'e.g. Squaring up for October' : isIn ? 'e.g. Stage 2 payment from Mrs Smith' : d.what === 'contractor' ? 'e.g. Dave the plasterer, 2 days' : d.what === 'vehicle' ? 'e.g. Diesel, van' : d.what === 'materials' ? 'e.g. Timber from Jewson' : 'What it was for'} />
         </label>
         <Suggest id="qm-desc" values={list('money', m => m.data.dir === d.dir && (isIn || m.data.cat === d.what)).map(m => m.data.desc)} />
 
@@ -172,7 +181,7 @@ export default function QuickMoney({ start = {}, onClose, onSaved }) {
           </label>
         </div>
 
-        {showJobs ? <>
+        {isBetween ? null : showJobs ? <>
           <span className="qm-label">Job (optional)</span>
           <div className="qm-scroll">
             <button className={'chip' + (d.job === NO_JOB ? ' on' : '')} onClick={() => set({ job: NO_JOB })}>{scan ? 'Miscellaneous' : 'No job'}</button>
@@ -181,7 +190,7 @@ export default function QuickMoney({ start = {}, onClose, onSaved }) {
           </div>
         </> : <button className="link-btn qm-jobs-link" onClick={() => setShowJobs(true)}>Link it to a job (optional)</button>}
 
-        {!isIn && <button className="qm-photo" disabled={!!busy} onClick={async () => { const [f] = await pickFile({ accept: 'image/*,application/pdf' }); if (f) readFile(f) }}>
+        {isOut && <button className="qm-photo" disabled={!!busy} onClick={async () => { const [f] = await pickFile({ accept: 'image/*,application/pdf' }); if (f) readFile(f) }}>
           {d.receipt ? <img src={d.receipt.thumb} alt="" /> : <span className="q-badge"><Icon name="receipt" size={20} /></span>}
           <span>{busy || (d.receipt ? 'Receipt added. Tap to swap it' : 'Add a receipt photo (optional)')}</span>
         </button>}
@@ -192,7 +201,7 @@ export default function QuickMoney({ start = {}, onClose, onSaved }) {
       <div className={'qm-actions' + (editing ? ' edit' : '')}>
         {editing ? <button className="btn danger" onClick={del} aria-label="Delete this payment"><Icon name="trash" size={18} /> Delete</button>
           : <button className="btn ghost" onClick={() => save(true)}>Save + next</button>}
-        <button className={'btn ' + (isIn ? 'primary' : 'orange')} onClick={() => save(false)}><Icon name="check" size={20} stroke={2.6} /> Save {num(d.amount) ? money(num(d.amount)) : ''}</button>
+        <button className={'btn ' + (isOut ? 'orange' : 'primary')} onClick={() => save(false)}><Icon name="check" size={20} stroke={2.6} /> Save {num(d.amount) ? money(num(d.amount)) : ''}</button>
       </div>
     </Sheet>
   )
