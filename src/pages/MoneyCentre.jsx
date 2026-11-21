@@ -1,7 +1,7 @@
 // Money centre: every payment in and out across all jobs, car costs and repeat payments, marked B or P,
 // with the running tally of who has put in what, who has had what, and who owes who.
 // There's no business account: all the money is in Brian's or Pete's account, and this adds them together.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { put, update, remove, useVersion, list } from '../store'
@@ -15,7 +15,9 @@ import { occurrences } from './CashFlow'
 import { isOverdue } from './Invoices'
 import { accountantCsv } from './Money'
 import { whatsApp, shareText, shareOrDownload } from '../files'
-import { allItems, tally, settle, againstOf, lockedUntil, isLocked, lockMsg, findDuplicate, taxYear, OPENING_ROWS, openingOf } from '../ledger'
+import { allItems, tally, settle, againstOf, lockedUntil, isLocked, lockMsg, findDuplicate, taxYear } from '../ledger'
+import { moveOpeningToPayments } from '../catchup'
+import QuickMoney, { SavedToast, whatLabel } from '../QuickMoney'
 
 const KIND = { income: 'Money in', expense: 'Money out', drawing: 'Paid themselves', transfer: 'Between you' }
 const CAT = { materials: 'Materials', contractor: 'Subcontractor', wages: 'Wages', vehicle: 'Car', repeat: 'Repeat payment', other: 'Other', client: 'Client payment', transfer: 'Settle up' }
@@ -33,6 +35,7 @@ function useCentre() {
   useVersion()
   const settings = useSettings()
   const owners = settings.owners
+  useEffect(() => { moveOpeningToPayments(owners) }, [owners.join()])
   const items = allItems(owners)
   return { settings, owners, items, t: tally(items, owners) }
 }
@@ -108,7 +111,7 @@ function AddSheet({ start, onClose, owners }) {
   )
 }
 
-function ItemRow({ it }) {
+function ItemRow({ it, onEdit }) {
   const locked = isLocked(it.date)
   const editable = (it.kind === 'income' || it.kind === 'expense') && it.src !== 'opening'
   const setPayer = p => locked ? alert(lockMsg(it.date)) : update(it.id, { payer: p })
@@ -118,7 +121,7 @@ function ItemRow({ it }) {
     else if (it.job) nav(`/job/${it.job}/money`)
     else if (it.src === 'genpay') nav('/cashflow')
     else if (locked) alert(lockMsg(it.date))
-    else if (it.src === 'money' && confirmDelete('this payment')) remove(it.id)
+    else if (it.src === 'money') onEdit(it.id)
   }
   const chip = it.kind === 'drawing' ? it.to : it.payer
   return (
@@ -254,7 +257,7 @@ function MonthTools({ owners, business }) {
   )
 }
 
-function TallyTab({ items, t, owners, settings, setAdd, setFilter, setTab }) {
+function TallyTab({ items, t, owners, settings, setAdd, setFilter, setTab, setQm }) {
   const { lines, pay } = settle(t.people, money)
   const f = forecast(items, owners)
   const owed = list('invoice', r => r.data.type === 'invoice' && r.data.status !== 'paid' && r.data.status !== 'draft').reduce((s, r) => s + invoiceTotals(r.data).total, 0)
@@ -272,13 +275,13 @@ function TallyTab({ items, t, owners, settings, setAdd, setFilter, setTab }) {
       {t.unmarked > 0 && <p className="notice small" style={{ marginTop: 10 }}>{t.unmarked} payment{t.unmarked > 1 ? 's aren\'t' : ' isn\'t'} marked B or P yet, so this isn't final. <button className="link-btn" onClick={() => { setFilter('none'); setTab('pay') }}>Mark {t.unmarked > 1 ? 'them' : 'it'}</button></p>}
     </section>
 
-    <StartingPoint owners={owners} />
+    <CatchUp owners={owners} setQm={setQm} />
 
     <div className="mc-people">{t.people.map(p => <PersonCard key={p.name} p={p} rel={(p.balance - (t.people.reduce((s, q) => s + q.balance, 0) - p.balance)) / 2} />)}</div>
     <p className="small muted" style={{ margin: '-4px 4px 14px' }}>Profits are split 50/50. There's no business account: these totals add up what's gone in and out of both your accounts.</p>
 
     <div className="money-actions" style={{ gridTemplateColumns: '1fr 1fr' }}>
-      <button className="btn primary" onClick={() => setAdd({ type: 'out' })}><Icon name="plus" size={20} /> Add money</button>
+      <button className="btn primary" onClick={() => setQm({})}><Icon name="plus" size={20} /> Add money</button>
       <button className="btn white" onClick={() => setAdd({ type: 'transfer' })}><Icon name="check" size={20} /> Settle up</button>
     </div>
 
@@ -300,128 +303,53 @@ function TallyTab({ items, t, owners, settings, setAdd, setFilter, setTab }) {
   </>
 }
 
-// ---------- Starting point ----------
+// ---------- Catching up ----------
 
-// Lump sums for everything before you started using the app, so the tally starts from where you really are
-function StartingPoint({ owners }) {
-  const [open, setOpen] = useState(false)
-  const o = openingOf()
-  const ent = k => (o?.entries || []).filter(e => e.kind === k).reduce((s, e) => s + num(e.amount), 0)
-  const sum = k => owners.reduce((s, n) => s + num(o?.[k]?.[n]), 0) + ent(k)
-  const out = sum('materials') + sum('wages') + sum('other')
-  // Individual lines in date order, with the running balance after each one (in minus out)
-  let run = 0
-  const lines = o ? [...(o.entries || [])].filter(e => num(e.amount) > 0)
-    .sort((a, b) => (a.date || o.date || '').localeCompare(b.date || o.date || ''))
-    .map(e => { run += e.kind === 'in' ? num(e.amount) : -num(e.amount); return { ...e, run } }) : []
-  const kindLabel = k => ENTRY_KINDS.find(([x]) => x === k)?.[1] || ''
+// Payments from before the app, added one at a time as you find them. Each is an ordinary payment marked catchup,
+// dated when it was paid, so it counts towards the 50/50 like everything else and can be changed or deleted.
+function CatchUp({ owners, setQm }) {
+  const [all, setAll] = useState(false)
+  const rows = list('money', r => r.data.catchup && num(r.data.amount) > 0).sort((a, b) => (b.data.date || '').localeCompare(a.data.date || ''))
+  const total = (n, f) => rows.filter(r => f(r.data) && (r.data.cat === 'transfer' ? r.data.payer === n : (r.data.dir === 'in' ? (r.data.against || r.data.payer) : r.data.payer) === n)).reduce((s, r) => s + num(r.data.amount), 0)
+  const shown = all ? rows : rows.slice(0, 8)
   return (
-    <section className="card mc-start">
-      <div className="card-head"><h2>Starting point</h2><button className="btn ghost small" onClick={() => setOpen(true)}><Icon name={o ? 'edit' : 'plus'} size={16} /> {o ? 'Change' : 'Set it'}</button></div>
-      {!o ? <p className="small muted" style={{ margin: 0 }}>Put in the totals from before you started using the app (for example the last 6 months): money in, materials, wages and other costs for each of you, and anything already owed between you. Everything here then starts from those numbers.</p> : <>
-        <p className="small muted" style={{ marginTop: 0 }}>Totals up to {niceDate(o.date)}, added in with everything since.</p>
-        <div className="mc-mini">
-          <div><span>In</span><b className="pos">{money(sum('in'))}</b></div>
-          <div><span>Out</span><b className="neg">{money(out)}</b></div>
-          <div><span>Owed</span><b>{num(o.owed?.amount) > 0 ? money(num(o.owed.amount)) : '–'}</b></div>
+    <section className="card mc-catch">
+      <div className="card-head"><h2>Catching up</h2>{rows.length > 0 && <span className="pill">{rows.length}</span>}</div>
+      <p className="small muted" style={{ marginTop: 0 }}>Add payments from before the app, one at a time, as you find them: materials, tools, vehicle costs, subcontractors, or client money paid to one of you. Each one counts towards the 50/50 from the date it was paid.</p>
+      <div className="mc-catch-btns">
+        {owners.map(n => <button key={n} className="btn ghost" onClick={() => setQm({ catchup: true, data: { dir: 'out', payer: n, date: '' } })}><Icon name="plus" size={18} /> {n} paid</button>)}
+        {owners.map(n => <button key={'in' + n} className="btn ghost" onClick={() => setQm({ catchup: true, data: { dir: 'in', against: n, date: '' } })}><Icon name="plus" size={18} /> Paid to {n}</button>)}
+      </div>
+      {rows.length > 0 && <>
+        <div className="mc-catch-tot">
+          {owners.map(n => <div key={n}><b>{n}</b><span>Paid out {money(total(n, d => d.dir === 'out' && d.cat !== 'transfer'))}</span><span>Paid to them {money(total(n, d => d.dir === 'in'))}</span></div>)}
         </div>
-        {num(o.owed?.amount) > 0 && <p className="small" style={{ margin: 0 }}>{o.owed.by} already owed {o.owed.to} {money(num(o.owed.amount))}.</p>}
-        {owners.some(n => num(o.between?.[n]) > 0) && <p className="small" style={{ margin: 0 }}>{owners.filter(n => num(o.between?.[n]) > 0).map(n => `${n} paid ${owners.find(x => x !== n)} ${money(num(o.between[n]))}`).join('. ')}.</p>}
-        {lines.length > 0 && <div className="sl-show">
-          <div className="sl-show-h small muted"><span>Individual lines</span><span>Balance</span></div>
-          {lines.map(e => <div key={e.id} className="sl-show-r">
-            <span className="small">{shortDate(e.date || o.date)} · {kindLabel(e.kind)}{e.desc ? ` · ${e.desc}` : ''}{e.payer ? ` · ${e.payer}` : ''}</span>
-            <span className="nowrap small"><b className={e.kind === 'in' ? 'pos' : 'neg'}>{e.kind === 'in' ? '+' : '−'}{money(num(e.amount))}</b> <span className="muted">= {sm(e.run)}</span></span>
-          </div>)}
-        </div>}
+        {shown.map(r => {
+          const d = r.data, isIn = d.dir === 'in', isT = d.cat === 'transfer'
+          const who = isT ? `${d.payer} → ${d.person}` : isIn ? (d.against || d.payer) : d.payer
+          return (
+            <button key={r.id} className="mc-catch-row" onClick={() => isT ? (confirmDelete(`this payment between you (${money(num(d.amount))})`) && remove(r.id)) : isLocked(d.date) ? alert(lockMsg(d.date)) : setQm({ id: r.id, data: d, job_id: r.job_id })}>
+              <span className="small muted nowrap">{shortDate(d.date)}</span>
+              <span className="text"><b>{d.desc || whatLabel(d)}</b><span className="small muted">{isT ? 'Paid between you' : whatLabel(d)}{who ? ` · ${who}` : ''}</span></span>
+              <span className={'nowrap ' + (isIn ? 'pos' : isT ? '' : 'neg')}>{isIn ? '+' : isT ? '' : '−'}{money(num(d.amount))}</span>
+            </button>
+          )
+        })}
+        {rows.length > 8 && <button className="btn ghost wide" style={{ marginTop: 8 }} onClick={() => setAll(a => !a)}>{all ? 'Show fewer' : `Show all ${rows.length}`}</button>}
+        <p className="small muted" style={{ marginBottom: 0 }}>Tap one to change or delete it.</p>
       </>}
-      {open && <StartingPointSheet owners={owners} onClose={() => setOpen(false)} />}
     </section>
-  )
-}
-
-const ENTRY_KINDS = [['in', 'Money in'], ['materials', 'Materials out'], ['wages', 'Wages out'], ['other', 'Other out']]
-
-function StartingPointSheet({ owners, onClose }) {
-  const o = openingOf() || {}
-  const [d, setD] = useState(() => {
-    const v = { date: o.date || today(), owed: { by: o.owed?.by || '', to: o.owed?.to || '', amount: o.owed?.amount ? String(o.owed.amount) : '' }, between: Object.fromEntries(owners.map(n => [n, o.between?.[n] ? String(o.between[n]) : ''])) }
-    OPENING_ROWS.forEach(r => { v[r.k] = Object.fromEntries(owners.map(n => [n, o[r.k]?.[n] ? String(o[r.k][n]) : ''])) })
-    v.entries = (o.entries || []).map(e => ({ ...e, amount: e.amount ? String(e.amount) : '' }))
-    return v
-  })
-  const setCell = (k, n, val) => setD(x => ({ ...x, [k]: { ...x[k], [n]: val } }))
-  const setOwed = p => setD(x => ({ ...x, owed: { ...x.owed, ...p } }))
-  const addEntry = () => setD(x => ({ ...x, entries: [...x.entries, { id: Date.now() + Math.random(), kind: 'materials', payer: owners[0] || '', amount: '', desc: '' }] }))
-  const setEntry = (id, p) => setD(x => ({ ...x, entries: x.entries.map(e => e.id === id ? { ...e, ...p } : e) }))
-  const delEntry = id => setD(x => ({ ...x, entries: x.entries.filter(e => e.id !== id) }))
-  const other = n => owners.find(x => x !== n) || ''
-  const entIn = d.entries.filter(e => e.kind === 'in').reduce((s, e) => s + num(e.amount), 0)
-  const entOut = d.entries.filter(e => e.kind !== 'in').reduce((s, e) => s + num(e.amount), 0)
-  const save = () => {
-    if (num(d.owed.amount) > 0 && !d.owed.by) return alert('Tap who owed the money')
-    const v = { date: d.date || today(), owed: num(d.owed.amount) > 0 ? { by: d.owed.by, to: d.owed.to, amount: num(d.owed.amount) } : null, between: Object.fromEntries(owners.map(n => [n, num(d.between[n])])) }
-    OPENING_ROWS.forEach(r => { v[r.k] = Object.fromEntries(owners.map(n => [n, num(d[r.k][n])])) })
-    v.entries = d.entries.filter(e => num(e.amount) > 0).map(e => ({ id: e.id, kind: e.kind, payer: e.payer, date: e.date || '', desc: (e.desc || '').trim(), amount: num(e.amount) }))
-    setS({ opening: v }); onClose()
-  }
-  const clear = () => { if (confirm('Remove the starting point? The tally will then only count payments in the app.')) { setS({ opening: null }); onClose() } }
-  return (
-    <Sheet open onClose={onClose} title="Starting point">
-      <p className="small muted" style={{ marginTop: 0 }}>The totals from before you started using the app. Leave a box empty if it's nothing.</p>
-      <label className="field"><span>Totals up to</span><input type="date" value={d.date} onChange={e => setD(x => ({ ...x, date: e.target.value }))} /></label>
-      <div className="start-grid">
-        <span />{owners.map(n => <b key={n}>{n}</b>)}
-        {OPENING_ROWS.flatMap(r => [
-          <span key={r.k} className="start-label">{r.l}<small>{r.hint}</small></span>,
-          ...owners.map(n => <span key={r.k + n} className="veh-amt"><span>£</span><input inputMode="decimal" placeholder="0.00" aria-label={`${r.l}, ${n}`} value={d[r.k][n]} onChange={e => setCell(r.k, n, e.target.value)} /></span>),
-        ])}
-      </div>
-      <h3 className="sub-h">Already owed between you</h3>
-      <p className="small muted" style={{ marginTop: 0 }}>Only if there's money owed that isn't covered by the boxes above.</p>
-      <label className="field"><span>Who owed it?</span><PayerToggle big value={d.owed.by} onChange={p => setOwed({ by: p, to: other(p) })} /></label>
-      <label className="field"><span>{d.owed.by ? `${d.owed.by} owed ${d.owed.to} (£)` : 'How much (£)'}</span><input inputMode="decimal" placeholder="0.00" value={d.owed.amount} onChange={e => setOwed({ amount: e.target.value })} /></label>
-      <h3 className="sub-h">Paid between you</h3>
-      <p className="small muted" style={{ marginTop: 0 }}>Money already sent from one of your accounts to the other. Leave empty if none.</p>
-      {owners.map(n => <label key={n} className="field"><span>{n} paid {other(n)} (£)</span><input inputMode="decimal" placeholder="0.00" value={d.between[n]} onChange={e => setD(x => ({ ...x, between: { ...x.between, [n]: e.target.value } }))} /></label>)}
-      <h3 className="sub-h">Individual payments</h3>
-      <p className="small muted" style={{ marginTop: 0 }}>One line per payment. Leave the date empty to use the starting point date.</p>
-      <div className="sl-tot"><span>In <b className="pos">{money(entIn)}</b></span><span>Out <b className="neg">{money(entOut)}</b></span></div>
-      <div className="sl-list">
-        {d.entries.map(e => (
-          <div key={e.id} className="sl-row">
-            <div className="sl-line1">
-              <input type="date" aria-label="Date paid" value={e.date || ''} onChange={ev => setEntry(e.id, { date: ev.target.value })} />
-              <select aria-label="Type" value={e.kind} onChange={ev => setEntry(e.id, { kind: ev.target.value })}>
-                {ENTRY_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-              </select>
-              <input inputMode="decimal" placeholder="£0.00" aria-label="Amount" value={e.amount} onChange={ev => setEntry(e.id, { amount: ev.target.value })} />
-            </div>
-            <div className="sl-line2">
-              <input aria-label="What for" placeholder="What for (optional)" value={e.desc || ''} onChange={ev => setEntry(e.id, { desc: ev.target.value })} />
-              <PayerToggle value={e.payer} onChange={p => setEntry(e.id, { payer: p })} />
-              <button className="icon-btn" aria-label="Remove this line" onClick={() => delEntry(e.id)}><Icon name="trash" size={16} /></button>
-            </div>
-          </div>
-        ))}
-      </div>
-      <button className="btn ghost wide" onClick={addEntry}><Icon name="plus" size={18} /> Add a line</button>
-      <div className="sheet-actions">
-        {openingOf() && <button className="btn danger" onClick={clear}><Icon name="trash" size={18} /></button>}
-        <button className="btn primary" onClick={save}>Save</button>
-      </div>
-    </Sheet>
   )
 }
 
 // ---------- Money in tab ----------
 
 // One payment in: who paid it, whose account it went into, and who it's set against
-function MoneyInRow({ it, owners }) {
+function MoneyInRow({ it, owners, onEdit }) {
   const locked = isLocked(it.date)
   const set = patch => locked ? alert(lockMsg(it.date)) : update(it.id, patch)
   const opening = it.src === 'opening'
-  const open = () => { if (opening) alert('This is part of the starting point. Change it on the Tally tab, under Starting point.'); else if (it.job) nav(`/job/${it.job}/money`); else if (it.src === 'genpay') nav('/cashflow') }
+  const open = () => { if (it.job) nav(`/job/${it.job}/money`); else if (it.src === 'genpay') nav('/cashflow'); else if (locked) alert(lockMsg(it.date)); else if (it.src === 'money') onEdit(it.id) }
   const into = owners.includes(it.payer) ? it.payer : ''
   const against = againstOf(it, owners)
   return (
@@ -441,7 +369,7 @@ function MoneyInRow({ it, owners }) {
   )
 }
 
-function MoneyInTab({ items, owners }) {
+function MoneyInTab({ items, owners, onEdit }) {
   const [filter, setFilter] = useState('all')
   const [shown, setShown] = useState(40)
   const ins = items.filter(it => it.kind === 'income')
@@ -458,9 +386,9 @@ function MoneyInTab({ items, owners }) {
       <div className="card-head"><h2>Every payment in</h2><span className="pill">{rows.length}</span></div>
       <div className="chips mc-filters">{[['all', 'All'], ...owners.map(n => [n, `Set against ${n}`]), ['none', `Not marked${unmarked.length ? ` (${unmarked.length})` : ''}`]].map(([k, l]) => <button key={k} className={'chip' + (filter === k ? ' on' : '')} onClick={() => { setFilter(k); setShown(40) }}>{l}</button>)}</div>
       {rows.length === 0 && <p className="muted small">{filter === 'none' ? 'Nothing to mark: every payment in is set.' : 'No money in yet.'}</p>}
-      {rows.slice(0, shown).map(it => <MoneyInRow key={it.key} it={it} owners={owners} />)}
+      {rows.slice(0, shown).map(it => <MoneyInRow key={it.key} it={it} owners={owners} onEdit={onEdit} />)}
       {rows.length > shown && <button className="btn ghost wide" style={{ marginTop: 10 }} onClick={() => setShown(s => s + 60)}>Show more</button>}
-      <p className="small muted" style={{ marginBottom: 0 }}>Tap a payment to open its job, where you can change who paid it.</p>
+      <p className="small muted" style={{ marginBottom: 0 }}>Tap a payment to change it. Payments on a job open that job.</p>
     </section>
   </>
 }
@@ -581,7 +509,7 @@ function SpendChart({ items }) {
   </>
 }
 
-function PaymentsTab({ items, filter, setFilter }) {
+function PaymentsTab({ items, filter, setFilter, onEdit }) {
   const payers = usePayers()
   const [shown, setShown] = useState(40)
   const noRec = items.filter(needsReceipt).length
@@ -600,9 +528,9 @@ function PaymentsTab({ items, filter, setFilter }) {
     <section className="card">
       <div className="card-head"><h2>Every payment</h2><span className="pill">{rows.length}</span></div>
       <div className="chips mc-filters">{filters.map(([k, l]) => <button key={k} className={'chip' + (filter === k ? ' on' : '')} onClick={() => { setFilter(k); setShown(40) }}>{l}</button>)}</div>
-      <p className="small muted" style={{ marginTop: 0 }}>{filter === 'norec' ? `Payments over £${RECEIPT_OVER} with no receipt photo. Tap one to open its job and add the photo.` : `Tap ${payers.map(p => p.letter).join(' or ')} to mark who paid, or whose account the money went into. Tap a payment to open its job.`}</p>
+      <p className="small muted" style={{ marginTop: 0 }}>{filter === 'norec' ? `Payments over £${RECEIPT_OVER} with no receipt photo. Tap one to open its job and add the photo.` : `Tap ${payers.map(p => p.letter).join(' or ')} to mark who paid, or whose account the money went into. Tap a payment to change it (job payments open their job).`}</p>
       {rows.length === 0 && <p className="muted small">Nothing here{filter === 'none' ? ': everything is marked' : ''}.</p>}
-      {rows.slice(0, shown).map(it => <ItemRow key={it.key} it={it} />)}
+      {rows.slice(0, shown).map(it => <ItemRow key={it.key} it={it} onEdit={onEdit} />)}
       {rows.length > shown && <button className="btn ghost wide" style={{ marginTop: 10 }} onClick={() => setShown(s => s + 60)}>Show more</button>}
     </section>
   </>
@@ -613,6 +541,13 @@ export default function MoneyCentre() {
   const [add, setAdd] = useState(null)
   const [tab, setTab] = useState('tally')
   const [filter, setFilter] = useState('all')
+  const [qm, setQm] = useState(null)
+  const [saved, setSaved] = useState(null)
+  const onEdit = id => {
+    const r = list('money').find(x => x.id === id); if (!r) return
+    if (r.data.cat === 'transfer') { if (confirmDelete(`this payment between you (${money(num(r.data.amount))})`)) remove(id); return }
+    setQm({ id, data: r.data, job_id: r.job_id })
+  }
   return (
     <div className="page">
       <TopBar title="Money centre" sub="All jobs, car costs and repeat payments" onBack={() => back('/')} />
@@ -620,13 +555,15 @@ export default function MoneyCentre() {
         <div className="seg mc-tabs">
           {[['tally', 'Tally'], ['in', 'Money in'], ['jobs', 'Jobs'], ['tax', 'Tax'], ['pay', 'Payments']].map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => { setTab(k); window.scrollTo(0, 0) }}>{l}</button>)}
         </div>
-        {tab === 'tally' && <TallyTab items={items} t={t} owners={owners} settings={settings} setAdd={setAdd} setFilter={setFilter} setTab={setTab} />}
-        {tab === 'in' && <MoneyInTab items={items} owners={owners} />}
+        {tab === 'tally' && <TallyTab items={items} t={t} owners={owners} settings={settings} setAdd={setAdd} setFilter={setFilter} setTab={setTab} setQm={setQm} />}
+        {tab === 'in' && <MoneyInTab items={items} owners={owners} onEdit={onEdit} />}
         {tab === 'jobs' && <JobsTab items={items} owners={owners} />}
         {tab === 'tax' && <TaxTab items={items} owners={owners} settings={settings} />}
-        {tab === 'pay' && <PaymentsTab items={items} filter={filter} setFilter={setFilter} />}
+        {tab === 'pay' && <PaymentsTab items={items} filter={filter} setFilter={setFilter} onEdit={onEdit} />}
       </main>
       {add && <AddSheet start={add} owners={owners} onClose={() => setAdd(null)} />}
+      {qm && <QuickMoney key={qm.id || 'new'} start={qm} onClose={() => setQm(null)} onSaved={setSaved} />}
+      <SavedToast saved={saved} onDone={() => setSaved(null)} />
     </div>
   )
 }
