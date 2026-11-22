@@ -24,6 +24,7 @@ import QuickMoney, { SavedToast } from '../QuickMoney'
 import '../home-pager.css'
 import '../home-calendar.css'
 import '../gestures.css'
+import '../jobs-compact.css'
 
 // The home pages. Swipe anywhere on the page to turn it, or scroll the bar and tap a tab to jump straight there
 const PAGE_TABS = ['Today', 'To-do', 'To Get', 'Money', 'Job list', 'Materials', 'Jobs', 'Calendar', 'Contacts']
@@ -208,18 +209,23 @@ function scrollsSideways(el, stop) {
 
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' }
 
-// Live jobs four to a page; tap the dots to see the next four
-function JobPager({ jobs, onLong }) {
-  const [page, setPage] = useState(0)
-  const pages = []
-  for (let i = 0; i < jobs.length; i += 4) pages.push(jobs.slice(i, i + 4))
-  const cur = Math.min(page, Math.max(0, pages.length - 1))
+// A slim job line for the Jobs page, so every booked and on-site job fits on screen at once
+function JobRow({ job, onLong }) {
+  const d = job.data
+  const lp = useLongPress(() => onLong(job), () => nav(`/job/${job.id}`))
+  const st = jobStatus(d)
+  const prog = jobProgress(d)
+  const m = jobMoney(job)
+  const when = prog ? prog.label : d.start ? `Starts ${shortDate(d.start)}` : 'No start date'
   return (
-    <div className="jpager">
-      <div className="jtrack" style={{ transform: `translateX(-${cur * 100}%)` }}>
-        {pages.map((pg, i) => <div className="jpage" key={i}>{pg.map(j => <JobCard key={j.id} job={j} onLong={onLong} />)}</div>)}
-      </div>
-      {pages.length > 1 && <div className="jdots">{pages.map((_, i) => <button key={i} className={i === cur ? 'on' : ''} aria-label={`Page ${i + 1}`} onClick={() => setPage(i)} />)}</div>}
+    <div className={'jrow st-' + st} {...lp} role="button" tabIndex={0}>
+      <span className="jrow-pic">{d.cover ? <img src={d.cover} alt="" /> : initials(d.client || d.name)}</span>
+      <span className="jrow-main">
+        <span className="jrow-top"><b>{d.client || d.name || 'Untitled job'}</b><em className={'jrow-st st-' + st}>{JOB_STATUS[st]}</em></span>
+        <span className="jrow-sub">{[d.address?.split('\n')[0], when].filter(Boolean).join(' · ')}</span>
+        {prog && prog.pct > 0 && <span className="jrow-bar"><i style={{ width: prog.pct + '%' }} /></span>}
+      </span>
+      {m.quote > 0 && <span className={'jrow-left' + (m.warn ? ' warn' : '')}><b>{Math.round(m.left)}%</b><small>left</small></span>}
     </div>
   )
 }
@@ -328,7 +334,7 @@ export default function Home() {
           ? <Empty icon="folder" title={finished.length ? 'No current jobs' : 'No jobs yet'} text="Press New job to add one. Each job has its own pages for Materials, Money and Schedule, plus Documents, Invoices and more under More at the bottom of the job." />
           : ordering
             ? <div className="reorder-list">{jobs.map((j, i) => <ReorderRow key={j.id} job={j} first={i === 0} last={i === jobs.length - 1} onMove={dir => moveJob(j.id, dir, jobs)} />)}</div>
-            : <JobPager jobs={jobs} onLong={j => setEditing(j.id)} />}
+            : <div className="jrows">{jobs.map(j => <JobRow key={j.id} job={j} onLong={j => setEditing(j.id)} />)}</div>}
         {jobs.length > 0 && <p className="hint">{ordering ? 'Use the arrows to put your most important jobs first. Tap Done when finished.' : 'Tap a job to open it. Press and hold to change its details or status. Tap Reorder to move jobs up or down. Finished jobs go into the folder below.'}</p>}
         {!ordering && <button className="finished-folder" onClick={() => nav('/finished')}>
           <span className="ff-ic"><Icon name="folder" size={26} /></span>
