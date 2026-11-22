@@ -17,7 +17,7 @@ import { ScopeAndValue } from './Job'
 import { GeneralCashFlow } from './CashFlow'
 import { MoneyCentreCard } from './MoneyCentre'
 import { MaterialsAllJobs } from './MaterialsAll'
-import { JobListPage } from './JobList'
+import { JobListSheet } from './JobList'
 import { VehicleSheet, CarIcon } from '../Vehicle'
 import { JobCalendar } from './Calendar'
 import QuickMoney, { SavedToast } from '../QuickMoney'
@@ -27,7 +27,7 @@ import '../gestures.css'
 import '../jobs-compact.css'
 
 // The home pages. Swipe anywhere on the page to turn it, or scroll the bar and tap a tab to jump straight there
-const PAGE_TABS = ['Today', 'To-do', 'To Get', 'Money', 'Job list', 'Materials', 'Jobs', 'Calendar', 'Contacts']
+const PAGE_TABS = ['Today', 'To-do', 'To Get', 'Money', 'Materials', 'Jobs', 'Calendar', 'Contacts']
 // Each tab keeps its own colour dot wherever it sits on the bar
 const TAB_COLOUR = { Today: 0, 'To-do': 1, 'To Get': 2, Money: 3, 'Job list': 4, Materials: 5, Calendar: 7, Contacts: 8, Jobs: 9 }
 
@@ -271,6 +271,7 @@ export default function Home() {
   const [saved, setSaved] = useState(null)
   const scan = async () => { const [f] = await pickFile({ accept: 'image/*,application/pdf' }); if (f) setQm({ file: f, data: { dir: 'out', cat: 'materials' } }) }
   const [car, setCar] = useState(false)
+  const [jobList, setJobList] = useState(false)
   const st = useStatus()
   const settings = useSettings()
   const editJob = jobs.find(j => j.id === editing)
@@ -301,6 +302,7 @@ export default function Home() {
           <button onClick={() => setCar(true)} aria-label="Vehicle costs: ULEZ, congestion, fuel, tickets"><span className="q-ic white"><CarIcon /></span>Car</button>
           <button onClick={() => setAdding(true)}><span className="q-ic white"><Icon name="plus" size={24} /></span>New job</button>
           <button onClick={() => setPage(1)}><span className="q-ic white"><Icon name="check" size={24} /></span>To-do</button>
+          <button onClick={() => setJobList(true)} aria-label="Job list"><span className="q-ic green"><Icon name="folder" size={24} /></span>Jobs</button>
         </div>
         <div className="home-today"><TodayCard /></div>
         <BackupReminder />
@@ -314,9 +316,6 @@ export default function Home() {
         <section className="pview-page">
           <MoneyCentreCard />
           <GeneralCashFlow />
-        </section>
-        <section className="pview-page">
-          <JobListPage />
         </section>
         <section className="pview-page">
           <MaterialsAllJobs />
@@ -359,6 +358,7 @@ export default function Home() {
       {qm && <QuickMoney start={qm} onClose={() => setQm(null)} onSaved={setSaved} />}
       <SavedToast saved={saved} onDone={() => setSaved(null)} />
       <VehicleSheet open={car} onClose={() => setCar(false)} />
+      <JobListSheet open={jobList} onClose={() => setJobList(false)} />
     </div>
   )
 }
