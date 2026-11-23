@@ -54,3 +54,17 @@
 .ml-text b { font-weight: 800; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ml-text span { font-size: 12.5px; color: var(--muted); font-weight: 600; }
 .ml-amt { font-weight: 900; white-space: nowrap; }
+/* Owed between you: quick notes of who owes who, counted once ticked */
+.iou-card .card-head .btn { min-height: 38px; }
+.iou-tots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
+.iou-tots > div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 16px; background: linear-gradient(180deg, #fff6ec, #ffead6); box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(255, 138, 43, .18); }
+.iou-tots > div:last-child { background: linear-gradient(180deg, #f2fcf6, #dff5e8); box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgba(18, 138, 85, .16); }
+.iou-tots span { font-size: 12.5px; font-weight: 800; color: var(--muted); }
+.iou-tots b { font-size: 20px; font-weight: 900; }
+.iou-net { margin: 6px 2px 4px; font-weight: 900; font-size: 15px; }
+.iou-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.iou-row.done { opacity: .65; }
+.iou-text { flex: 1; min-width: 0; display: grid; text-align: left; border: 0; background: none; padding: 0; font: inherit; color: inherit; }
+.iou-text b { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iou-text span { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.iou-amt { font-weight: 900; white-space: nowrap; }
