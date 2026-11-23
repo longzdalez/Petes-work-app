@@ -179,6 +179,78 @@ function MonthTools({ owners, business }) {
   )
 }
 
+// ---------- Owed between you ----------
+
+// Quick notes of who owes who ("Brian owes Pete £40 for the skip"). They keep their own running total and only
+// count in the Money centre once ticked. Ticking one counts it as if the one owed had paid the other that much.
+function IouSheet({ start, owners, onClose }) {
+  const [a, b] = owners
+  const [d, setD] = useState({ from: b, to: a, amount: '', desc: '', date: today(), ticked: false, ...(start.data || {}) })
+  const set = p => setD(x => ({ ...x, ...p }))
+  const save = () => {
+    const amount = num(d.amount)
+    if (!amount) return alert('Please put in an amount')
+    if (!d.desc.trim()) return alert('Please say what it is for')
+    if (d.ticked && isLocked(d.date)) return alert(lockMsg(d.date))
+    put('iou', { ...d, amount, desc: d.desc.trim() }, start.id ? { id: start.id } : {})
+    onClose()
+  }
+  return (
+    <Sheet open onClose={onClose} title={start.id ? 'Change what\'s owed' : 'Who owes who'}>
+      <div className="seg">
+        {[[b, a], [a, b]].map(([f, t]) => <button key={f} className={d.from === f ? 'on' : ''} onClick={() => set({ from: f, to: t })}>{f} owes {t}</button>)}
+      </div>
+      <label className="qm-amount"><span>£</span><input inputMode="decimal" value={d.amount} placeholder="0.00" autoFocus={!start.id} aria-label="Amount in pounds" style={{ width: `${Math.max(4, String(d.amount).length) + 0.5}ch` }} onChange={e => set({ amount: e.target.value.replace(/[^\d.,]/g, '') })} /></label>
+      <label className="field"><span>What's it for?</span><input value={d.desc} onChange={e => set({ desc: e.target.value })} placeholder="e.g. Half the skip hire" /></label>
+      <label className="field"><span>Date</span><input type="date" value={d.date} onChange={e => e.target.value && set({ date: e.target.value })} /></label>
+      <div className="sheet-actions">
+        {start.id && <button className="btn danger" onClick={() => { if (confirmDelete('this note')) { remove(start.id); onClose() } }}><Icon name="trash" size={18} /></button>}
+        <button className="btn primary" onClick={save}>Save</button>
+      </div>
+    </Sheet>
+  )
+}
+
+function OwedBetween({ owners }) {
+  const [a, b] = owners
+  const [edit, setEdit] = useState(null)
+  const [showTicked, setShowTicked] = useState(false)
+  const notes = list('iou', r => num(r.data.amount) > 0).sort((x, y) => (y.data.date || '').localeCompare(x.data.date || ''))
+  const open = notes.filter(r => !r.data.ticked), ticked = notes.filter(r => r.data.ticked)
+  const sum = (rows, from) => rows.filter(r => r.data.from === from).reduce((s, r) => s + num(r.data.amount), 0)
+  const bOwes = sum(open, b), aOwes = sum(open, a), net = bOwes - aOwes
+  const tick = r => {
+    if (isLocked(r.data.date)) return alert(lockMsg(r.data.date))
+    update(r.id, { ticked: !r.data.ticked, tickedOn: r.data.ticked ? '' : today() })
+  }
+  if (!a || !b) return null
+  const Row = ({ r }) => (
+    <div className={'iou-row' + (r.data.ticked ? ' done' : '')}>
+      <button className={'tick' + (r.data.ticked ? ' on' : '')} onClick={() => tick(r)} aria-label={r.data.ticked ? 'Untick' : 'Tick to count it in the Money centre'}>{r.data.ticked && <Icon name="check" size={16} stroke={3} />}</button>
+      <button className="iou-text" onClick={() => setEdit({ id: r.id, data: r.data })}>
+        <b>{r.data.desc}</b><span>{r.data.from} owes {r.data.to} · {shortDate(r.data.date)}{r.data.ticked ? ' · counted' : ''}</span>
+      </button>
+      <span className="iou-amt">{money(num(r.data.amount))}</span>
+    </div>
+  )
+  return (
+    <section className="card iou-card">
+      <div className="card-head"><h2>Owed between you</h2><button className="btn primary small" onClick={() => setEdit({})}><Icon name="plus" size={16} /> Add</button></div>
+      <div className="iou-tots">
+        <div><span>{b} owes {a}</span><b>{money(bOwes)}</b></div>
+        <div><span>{a} owes {b}</span><b>{money(aOwes)}</b></div>
+      </div>
+      {open.length > 0 && <p className="iou-net">{Math.abs(net) < 0.005 ? 'These cancel each other out.' : `Overall ${net > 0 ? b : a} owes ${net > 0 ? a : b} ${money(Math.abs(net))}`}</p>}
+      {open.map(r => <Row key={r.id} r={r} />)}
+      {open.length === 0 && <p className="small muted" style={{ margin: '4px 0 0' }}>Nothing waiting. Tap Add to note something one of you owes the other.</p>}
+      {ticked.length > 0 && <button className="link-btn" style={{ marginTop: 8 }} onClick={() => setShowTicked(s => !s)}>{showTicked ? 'Hide ticked' : `Show ticked (${ticked.length})`}</button>}
+      {showTicked && ticked.map(r => <Row key={r.id} r={r} />)}
+      <p className="small muted" style={{ marginBottom: 0 }}>These don't count in the figures below until you tick them. Tap one to change it.</p>
+      {edit && <IouSheet start={edit} owners={owners} onClose={() => setEdit(null)} />}
+    </section>
+  )
+}
+
 // ---------- Overview: who owes who, and the lists ----------
 
 // The separate lists, each worked out from every payment in the app
@@ -188,7 +260,7 @@ function useLists(items, owners) {
   const lists = [
     { k: 'in', title: 'Money in', sub: 'Client money, and who it was paid to', sign: '+', cls: 'pos', rows: items.filter(it => it.kind === 'income'), add: { data: { dir: 'in' } } },
     ...owners.map(n => ({ k: 'out-' + n, title: `${n}'s outgoings`, sub: `Everything ${n} has paid for`, sign: '−', cls: 'neg', rows: items.filter(it => it.kind === 'expense' && it.payer === n), add: { data: { dir: 'out', payer: n } } })),
-    ...(a && b ? [[a, b], [b, a]].map(([x, y]) => ({ k: `pay-${x}-${y}`, title: `${x} paid ${y}`, sub: 'Money between you', sign: '', cls: '', rows: items.filter(it => (it.kind === 'transfer' || it.kind === 'drawing') && it.payer === x && it.to === y), add: { data: { dir: 'between', payer: x, person: y } } })) : []),
+    ...(a && b ? [[a, b], [b, a]].map(([x, y]) => ({ k: `pay-${x}-${y}`, title: `${x} paid ${y}`, sub: 'Money between you', sign: '', cls: '', rows: items.filter(it => (it.kind === 'transfer' || it.kind === 'drawing') && it.src !== 'iou' && it.payer === x && it.to === y), add: { data: { dir: 'between', payer: x, person: y } } })) : []),
   ]
   const unmarked = items.filter(it => (it.kind === 'income' && !againstOf(it, owners)) || (it.kind === 'expense' && !isOwner(it.payer)))
   if (unmarked.length) lists.push({ k: 'unmarked', title: 'Not marked B or P', sub: 'Tap each one to say who', sign: '', cls: '', rows: unmarked, warn: true })
@@ -233,6 +305,8 @@ function Overview({ items, t, owners, settings, setQm, onOpen }) {
   const f = forecast(items, owners)
   const cur = open && lists.find(l => l.k === open)
   return <>
+    <OwedBetween owners={owners} />
+
     <section className="card mc-owed mc-hero">
       <p className="mc-big">{lines[0] || 'Add some payments and who owes who shows here.'}</p>
       <div className="mc-mini">
@@ -406,6 +480,7 @@ export default function MoneyCentre() {
   const onOpen = it => {
     if (it.job) return nav(`/job/${it.job}/money`)
     if (it.src === 'genpay') return nav('/cashflow')
+    if (it.src === 'iou') return alert('This is in Owed between you at the top. Untick it there to stop it counting.')
     if (it.src !== 'money') return
     if (isLocked(it.date)) return alert(lockMsg(it.date))
     const r = list('money').find(x => x.id === it.id)
