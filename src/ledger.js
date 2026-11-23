@@ -47,6 +47,11 @@ export function allItems(owners) {
     // Recurring payments count on each date they fall on, paid to or from the chosen payer
     recurDates(d, t).forEach(date => out.push({ key: r.id + date, id: r.id, src: 'genpay', kind: d.dir === 'in' ? 'income' : 'expense', amount: a, date, desc: d.desc || 'Recurring payment', cat: 'repeat', payer: d.payer || '', against: d.against || '', from: '', to: '', job: null, jobName: '' }))
   })
+  // "Owed between you" notes count only once ticked: a note that Brian owes Pete counts as if Pete had paid Brian that much
+  list('iou', r => r.data.ticked && num(r.data.amount) > 0).forEach(r => {
+    const d = r.data
+    out.push({ key: r.id, id: r.id, src: 'iou', kind: 'transfer', amount: num(d.amount), date: d.date || '', desc: `${d.from} owes ${d.to}${d.desc ? ': ' + d.desc : ''}`, cat: 'iou', payer: d.to, to: d.from, job: null, jobName: '', against: '', from: '' })
+  })
   out.push(...openingItems(owners))
   return out.sort((a, b) => b.date.localeCompare(a.date))
 }
