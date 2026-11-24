@@ -115,3 +115,15 @@
 .home-pager::-webkit-scrollbar { display: none; }
 .home-page { flex: 0 0 100%; min-width: 100%; scroll-snap-align: start; overflow-y: auto; padding: 0 14px 90px; box-sizing: border-box; height: calc(100dvh - 190px); }
 .home-page .section-head { margin-top: 6px; }
+/* Materials £ broken into lines on the job value */
+.mat-lines-btn { display: grid; gap: 1px; width: 100%; text-align: left; padding: 10px 12px; border: 0; border-radius: 14px; font: inherit; color: var(--ink); background: linear-gradient(180deg, #fff, #f6faf8); box-shadow: inset 0 1px 0 #fff, 0 0 0 1.5px #dbe9e0; }
+.mat-lines-btn b { font-size: 17px; font-weight: 900; }
+.mat-lines-btn small { font-size: 12px; font-weight: 700; color: var(--g700, #128a55); }
+.mat-lines-add { display: inline-flex; align-items: center; gap: 4px; margin: -4px 0 12px; }
+.ml-lines { display: grid; gap: 8px; margin-bottom: 12px; }
+.ml-line { display: flex; align-items: center; gap: 6px; }
+.ml-line .icon-btn { flex-shrink: 0; width: 36px; min-width: 36px; }
+.ml-line .ml-desc { flex: 1 1 0; width: 0; min-width: 0; padding: 12px; border: 1.5px solid var(--line); border-radius: 12px; font: inherit; font-size: 16px; }
+.ml-line .ml-amt-in { display: flex; align-items: center; gap: 2px; width: 100px; margin: 0; flex-shrink: 0; padding: 0 10px; border: 1.5px solid var(--line); border-radius: 12px; background: #fff; }
+.ml-amt-in span { font-weight: 800; color: var(--muted); }
+.ml-amt-in input { width: 100%; min-width: 0; padding: 12px 0; border: 0; outline: none; background: none; font: inherit; font-size: 16px; font-weight: 800; text-align: right; }

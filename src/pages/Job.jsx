@@ -112,6 +112,13 @@ export function ScopeAndValue({ job, compact }) {
   const hasSplit = d.valueMaterials !== undefined && d.valueMaterials !== '' || d.valueLabour !== undefined && d.valueLabour !== ''
   // Job value = materials + labour
   const setPart = (k, v) => { const p = { ...d, [k]: clean(v) }; set({ [k]: clean(v), value: num(p.valueMaterials) + num(p.valueLabour) }) }
+  const [itemise, setItemise] = useState(false)
+  const lines = Array.isArray(d.materialLines) ? d.materialLines : []
+  // Saving the lines sets Materials £ to their total (and so the job value). No lines left = back to one typed figure.
+  const saveLines = ls => {
+    const total = Math.round(ls.reduce((s, l) => s + num(l.amount), 0) * 100) / 100
+    set({ materialLines: ls, ...(ls.length ? { valueMaterials: total, value: total + num(d.valueLabour) } : {}) })
+  }
   const body = <>
     <Field label={compact ? "Scope of works" : "What needs doing"} value={d.scope} onChange={v => set({ scope: v })} multiline rows={compact ? 4 : 6} placeholder="What needs doing on this job, e.g. strip out kitchen, move radiator, first and second fix electrics, plaster, fit units" />
     <label className="field"><span>Job value</span>
@@ -121,19 +128,62 @@ export function ScopeAndValue({ job, compact }) {
       </div>
     </label>
     <div className="two">
-      <Field label="Materials £" inputMode="decimal" value={d.valueMaterials ?? ''} onChange={v => setPart('valueMaterials', v)} placeholder="0.00" />
+      {lines.length
+        ? <label className="field"><span>Materials £</span><button className="mat-lines-btn" onClick={() => setItemise(true)}><b>{money(num(d.valueMaterials))}</b><small>{lines.length} line{lines.length === 1 ? '' : 's'} · tap to change</small></button></label>
+        : <Field label="Materials £" inputMode="decimal" value={d.valueMaterials ?? ''} onChange={v => setPart('valueMaterials', v)} placeholder="0.00" />}
       <Field label="Labour £" inputMode="decimal" value={d.valueLabour ?? ''} onChange={v => setPart('valueLabour', v)} placeholder="0.00" />
     </div>
+    {!lines.length && <button className="link-btn mat-lines-add" onClick={() => setItemise(true)}><Icon name="plus" size={16} /> Break materials into lines</button>}
     <div className="worth-total"><span>{vt === 'estimate' ? 'Estimate' : 'Quotation'} total</span><b>{money(num(d.value))}</b></div>
     {!hasSplit && num(d.value) > 0 && <p className="small muted" style={{ marginTop: -6 }}>Put in the materials and labour above and the total adds itself up.</p>}
     <Field label="Details (optional)" value={d.valueNotes} onChange={v => set({ valueNotes: v })} multiline rows={2} placeholder="e.g. Includes materials, excludes kitchen units" />
   </>
-  if (compact) return body
+  const sheet = itemise && <MaterialLinesSheet lines={lines} current={num(d.valueMaterials)} onSave={saveLines} onClose={() => setItemise(false)} />
+  if (compact) return <>{body}{sheet}</>
   return (
     <section className="card scope-card">
       <div className="card-head"><h2>Scope of works</h2>{d.value ? <span className="pill orange">{vt === 'estimate' ? 'Estimate' : 'Quote'} {money(d.value)}</span> : null}</div>
       {body}
+      {sheet}
     </section>
+  )
+}
+
+// Materials for the quote as separate lines (description and amount) that add up to the Materials £ figure
+let lineSeq = 0
+const newLine = (desc = '', amount = '') => ({ id: `l${Date.now().toString(36)}${lineSeq++}`, desc, amount })
+function MaterialLinesSheet({ lines, current, onSave, onClose }) {
+  // First time: keep any figure already typed in as the first line, so nothing is lost
+  const [ls, setLs] = useState(() => lines.length ? lines.map(l => ({ ...l, amount: l.amount === '' ? '' : String(l.amount) }))
+    : current > 0 ? [newLine('Materials', String(current)), newLine()] : [newLine()])
+  const [focus, setFocus] = useState(null)
+  const setL = (id, p) => setLs(x => x.map(l => l.id === id ? { ...l, ...p } : l))
+  const add = () => { const l = newLine(); setLs(x => [...x, l]); setFocus(l.id) }
+  const total = ls.reduce((s, l) => s + num(l.amount), 0)
+  const save = () => {
+    const keep = ls.filter(l => l.desc.trim() || num(l.amount)).map(l => ({ id: l.id, desc: l.desc.trim(), amount: num(l.amount) }))
+    onSave(keep); onClose()
+  }
+  return (
+    <Sheet open onClose={onClose} title="Materials breakdown" full>
+      <div className="ml-lines">
+        {ls.map((l, i) => (
+          <div key={l.id} className="ml-line">
+            <input className="ml-desc" value={l.desc} placeholder={i === 0 ? 'e.g. Oak boards' : 'Description'} autoFocus={focus === l.id} aria-label="Description" onChange={e => setL(l.id, { desc: e.target.value })} />
+            <label className="ml-amt-in"><span>£</span><input inputMode="decimal" value={l.amount} placeholder="0.00" aria-label="Amount in pounds"
+              onChange={e => setL(l.id, { amount: e.target.value.replace(/[^\d.,]/g, '') })} onKeyDown={e => e.key === 'Enter' && add()} /></label>
+            <button className="icon-btn" aria-label="Remove this line" onClick={() => setLs(x => x.filter(y => y.id !== l.id))}><Icon name="close" size={18} /></button>
+          </div>
+        ))}
+        <button className="add-line" onClick={add}><Icon name="plus" size={18} /> Add line</button>
+      </div>
+      <div className="worth-total"><span>Materials total</span><b>{money(total)}</b></div>
+      <p className="small muted" style={{ marginTop: -6 }}>This total becomes the Materials £ figure and is added to the labour for the job value.</p>
+      <div className="sheet-actions">
+        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn primary" onClick={save}>Save</button>
+      </div>
+    </Sheet>
   )
 }
 
