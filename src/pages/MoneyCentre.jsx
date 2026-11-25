@@ -253,57 +253,98 @@ function OwedBetween({ owners }) {
 
 // ---------- Overview: who owes who, and the lists ----------
 
-// The separate lists, each worked out from every payment in the app
-function useLists(items, owners) {
+// Every payment in one list, newest first, with buttons to show just one kind
+function paymentViews(items, owners) {
   const [a, b] = owners
   const isOwner = n => owners.includes(n)
-  const lists = [
-    { k: 'in', title: 'Money in', sub: 'Client money, and who it was paid to', sign: '+', cls: 'pos', rows: items.filter(it => it.kind === 'income'), add: { data: { dir: 'in' } } },
-    ...owners.map(n => ({ k: 'out-' + n, title: `${n}'s outgoings`, sub: `Everything ${n} has paid for`, sign: '−', cls: 'neg', rows: items.filter(it => it.kind === 'expense' && it.payer === n), add: { data: { dir: 'out', payer: n } } })),
-    ...(a && b ? [[a, b], [b, a]].map(([x, y]) => ({ k: `pay-${x}-${y}`, title: `${x} paid ${y}`, sub: 'Money between you', sign: '', cls: '', rows: items.filter(it => (it.kind === 'transfer' || it.kind === 'drawing') && it.src !== 'iou' && it.payer === x && it.to === y), add: { data: { dir: 'between', payer: x, person: y } } })) : []),
+  const between = (x, y) => items.filter(it => (it.kind === 'transfer' || it.kind === 'drawing') && it.src !== 'iou' && it.payer === x && it.to === y)
+  const notes = (x, y) => list('iou', r => r.data.from === x && r.data.to === y && num(r.data.amount) > 0)
+    .map(r => ({ key: r.id, id: r.id, src: 'iounote', kind: 'iou', date: r.data.date || '', desc: r.data.desc || '', amount: num(r.data.amount), payer: x, to: y, ticked: !!r.data.ticked, rec: r }))
+    .sort((p, q) => q.date.localeCompare(p.date))
+  const spent = (n, cats) => items.filter(it => it.kind === 'expense' && it.payer === n && cats.includes(it.cat))
+  const pairs = a && b ? [[b, a], [a, b]] : []
+  const people = b ? [b, a] : [a]
+  const views = [
+    { k: 'all', title: 'All payments', rows: items, add: {} },
+    ...pairs.map(([x, y]) => ({ k: `pay-${x}`, title: `${x} paid ${y}`, rows: between(x, y), add: { data: { dir: 'between', payer: x, person: y } } })),
+    ...pairs.map(([x, y]) => ({ k: `owe-${x}`, title: `${x} owes ${y}`, rows: notes(x, y), iou: { from: x, to: y }, owes: true })),
+    ...people.map(n => ({ k: `mat-${n}`, title: `${n} materials paid`, rows: spent(n, ['materials']), add: { data: { dir: 'out', cat: 'materials', payer: n } } })),
+    ...people.map(n => ({ k: `sub-${n}`, title: `${n} subcontractor payments`, rows: spent(n, ['contractor']), add: { data: { dir: 'out', cat: 'contractor', payer: n } } })),
+    { k: 'in', title: 'Money in', rows: items.filter(it => it.kind === 'income'), add: { data: { dir: 'in' } } },
+    { k: 'bal', title: 'Balance to date', balance: true },
   ]
   const unmarked = items.filter(it => (it.kind === 'income' && !againstOf(it, owners)) || (it.kind === 'expense' && !isOwner(it.payer)))
-  if (unmarked.length) lists.push({ k: 'unmarked', title: 'Not marked B or P', sub: 'Tap each one to say who', sign: '', cls: '', rows: unmarked, warn: true })
-  return lists.map(l => ({ ...l, total: l.rows.reduce((s, it) => s + it.amount, 0) }))
+  if (unmarked.length) views.push({ k: 'unmarked', title: 'Not marked B or P', rows: unmarked, warn: true })
+  return views.map(v => ({ ...v, total: (v.rows || []).reduce((s, it) => s + (v.owes && it.ticked ? 0 : it.amount), 0) }))
 }
 
-// One line in a list: date, what it was, the details, and the amount
-function ListRow({ it, owners, list: l, onOpen }) {
-  const who = it.kind === 'income' ? (() => { const g = againstOf(it, owners), into = owners.includes(it.payer) ? it.payer : ''; return g ? (into && into !== g ? `Into ${into}, counts for ${g}` : `Paid to ${g}`) : 'Not marked' })()
-    : it.kind === 'transfer' || it.kind === 'drawing' ? `${it.payer} → ${it.to}` : (owners.includes(it.payer) ? `Paid by ${it.payer}` : 'Not marked')
-  const what = it.kind === 'transfer' || it.kind === 'drawing' ? 'Between you' : it.kind === 'income' ? (it.from ? `From ${it.from}` : 'Money in') : (CAT[it.cat] || 'Money out')
+// One line: date, what it was, who paid who (or for what), and the amount
+function ListRow({ it, owners, onOpen }) {
+  const pp = n => owners.includes(n) ? n : ''
+  let what, who
+  if (it.kind === 'iou') { what = `${it.payer} owes ${it.to}`; who = it.ticked ? 'Ticked, counted in the balance' : 'Not ticked yet' }
+  else if (it.src === 'iou') { what = it.desc; who = 'Owed between you, ticked' }
+  else if (it.kind === 'transfer' || it.kind === 'drawing') { what = `${it.payer} paid ${it.to}`; who = '' }
+  else if (it.kind === 'income') { const g = againstOf(it, owners), into = pp(it.payer); what = it.from ? `From ${it.from}` : 'Money in'; who = g ? (into && into !== g ? `Into ${into}, counts for ${g}` : `Paid to ${g}`) : 'Not marked B or P' }
+  else { what = CAT[it.cat] || 'Money out'; who = pp(it.payer) ? `Paid by ${it.payer}` : 'Not marked B or P' }
   const sign = it.kind === 'income' ? '+' : it.kind === 'expense' ? '−' : ''
+  const title = it.src === 'iou' ? it.desc : (it.desc || what)
   return (
-    <button className={'ml-row' + (isLocked(it.date) ? ' locked' : '')} onClick={() => onOpen(it)}>
+    <button className={'ml-row' + (isLocked(it.date) ? ' locked' : '') + (it.kind === 'iou' && it.ticked ? ' done' : '')} onClick={() => onOpen(it)}>
       <span className="ml-date">{shortDate(it.date)}</span>
-      <span className="ml-text"><b>{it.desc || what}</b><span>{[what, l.k === 'in' || l.k === 'unmarked' ? who : '', it.jobName].filter(Boolean).join(' · ')}{needsReceipt(it) ? ' · no receipt' : ''}</span></span>
+      <span className="ml-text"><b>{title}</b><span>{[title === what ? '' : what, who, it.jobName].filter(Boolean).join(' · ')}{needsReceipt(it) ? ' · no receipt' : ''}</span></span>
       <span className={'ml-amt ' + (it.kind === 'income' ? 'pos' : it.kind === 'expense' ? 'neg' : '')}>{sign}{money(it.amount)}</span>
     </button>
   )
 }
 
-function ListSheet({ l, owners, onClose, onOpen, setQm }) {
-  const [shown, setShown] = useState(60)
+function PaymentsCard({ items, t, owners, setQm, onOpen }) {
+  const [sel, setSel] = useState('all')
+  const [shown, setShown] = useState(40)
+  const [iou, setIou] = useState(null)
+  const views = paymentViews(items, owners)
+  const v = views.find(x => x.k === sel) || views[0]
+  const { lines } = settle(t.people, money)
+  const pick = k => { setSel(k === sel ? 'all' : k); setShown(40) }
+  // Notes of who owes who open their own little form; everything else opens as usual
+  const open = it => {
+    if (it.src === 'iounote' || it.src === 'iou') { const r = list('iou').find(x => x.id === it.id); if (r) return setIou({ id: r.id, data: r.data }) }
+    onOpen(it)
+  }
+  const add = () => v.iou ? setIou({ data: { from: v.iou.from, to: v.iou.to } }) : setQm(v.add)
   return (
-    <Sheet open onClose={onClose} title={l.title} full>
-      <div className="ml-head">
-        <div><span>{l.rows.length} payment{l.rows.length === 1 ? '' : 's'}</span><b className={l.cls}>{l.sign}{money(l.total)}</b></div>
-        {l.add && <button className="btn primary" onClick={() => setQm(l.add)}><Icon name="plus" size={18} /> Add</button>}
+    <section className="card pay-card">
+      <div className="card-head"><h2>Payments</h2>{sel !== 'all' && <button className="link-btn" onClick={() => pick('all')}>Show all</button>}</div>
+      <div className="pay-btns">
+        {views.filter(x => x.k !== 'all').map(x => (
+          <button key={x.k} className={'pay-btn' + (sel === x.k ? ' on' : '') + (x.warn ? ' warn' : '') + (x.balance ? ' bal' : '')} onClick={() => pick(x.k)}>
+            <span>{x.title}</span><b>{x.balance ? (lines[0] || 'All square') : money(x.total)}</b>
+          </button>
+        ))}
       </div>
-      {l.rows.length === 0 && <p className="muted small">Nothing here yet. Tap Add to put one in. For an older payment, pick the date it was paid.</p>}
-      <div className="ml-list">{l.rows.slice(0, shown).map(it => <ListRow key={it.key} it={it} owners={owners} list={l} onOpen={onOpen} />)}</div>
-      {l.rows.length > shown && <button className="btn ghost wide" style={{ marginTop: 10 }} onClick={() => setShown(s => s + 100)}>Show more</button>}
-      {l.rows.length > 0 && <p className="small muted">Tap a line to change or delete it. Payments on a job open that job.</p>}
-    </Sheet>
+      {v.balance ? <div className="pay-bal">
+        <p className="mc-big">{lines[0] || 'Nothing owed either way yet.'}</p>
+        <div className="mc-people">{t.people.map(p => <PersonCard key={p.name} p={p} rel={(p.balance - (t.people.reduce((s, q) => s + q.balance, 0) - p.balance)) / 2} />)}</div>
+        <p className="small muted" style={{ margin: 0 }}>Everything to date. Notes in Owed between you only count once ticked.</p>
+      </div> : <>
+        <div className="ml-head">
+          <div><span>{v.k === 'all' ? 'Newest first' : v.title}</span><b>{v.k === 'all' ? `${v.rows.length} payment${v.rows.length === 1 ? '' : 's'}` : money(v.total)}</b></div>
+          {(v.add || v.iou) && <button className="btn primary" onClick={add}><Icon name="plus" size={18} /> Add</button>}
+        </div>
+        {v.owes && <p className="small muted" style={{ marginTop: -4 }}>Total is what's not ticked yet. Ticked ones are already in the balance.</p>}
+        {v.rows.length === 0 && <p className="muted small">Nothing here yet.</p>}
+        <div className="ml-list">{v.rows.slice(0, shown).map(it => <ListRow key={it.key} it={it} owners={owners} onOpen={open} />)}</div>
+        {v.rows.length > shown && <button className="btn ghost wide" style={{ marginTop: 10 }} onClick={() => setShown(s => s + 100)}>Show more ({v.rows.length - shown} left)</button>}
+        {v.rows.length > 0 && <p className="small muted" style={{ marginBottom: 0 }}>Tap any line to change the amount, date, who paid, what it was for or the job, or to delete it.</p>}
+      </>}
+      {iou && <IouSheet start={iou} owners={owners} onClose={() => setIou(null)} />}
+    </section>
   )
 }
 
 function Overview({ items, t, owners, settings, setQm, onOpen }) {
-  const [open, setOpen] = useState(null)
   const { lines, pay } = settle(t.people, money)
-  const lists = useLists(items, owners)
   const f = forecast(items, owners)
-  const cur = open && lists.find(l => l.k === open)
   return <>
     <OwedBetween owners={owners} />
 
@@ -325,16 +366,8 @@ function Overview({ items, t, owners, settings, setQm, onOpen }) {
       </details>
     </section>
 
-    <div className="ml-tiles">
-      {lists.map(l => (
-        <button key={l.k} className={'ml-tile' + (l.warn ? ' warn' : '') + (l.k === 'in' ? ' in' : '')} onClick={() => setOpen(l.k)}>
-          <span className="ml-tile-t">{l.title}</span>
-          <b className={l.cls}>{l.sign}{money(l.total)}</b>
-          <span className="ml-tile-s">{l.rows.length} · {l.sub}</span>
-        </button>
-      ))}
-    </div>
-    <p className="small muted" style={{ margin: '0 4px 14px' }}>Catching up on older payments? Open a list, tap Add and pick the date it was paid.</p>
+    <PaymentsCard items={items} t={t} owners={owners} setQm={setQm} onOpen={onOpen} />
+    <p className="small muted" style={{ margin: '0 4px 14px' }}>Catching up on older payments? Tap a button, then Add, and pick the date it was paid.</p>
 
     <LatePayers />
 
@@ -351,7 +384,6 @@ function Overview({ items, t, owners, settings, setQm, onOpen }) {
     </details>}
 
     <MonthTools owners={owners} business={settings.business} />
-    {cur && <ListSheet l={cur} owners={owners} onClose={() => setOpen(null)} onOpen={onOpen} setQm={setQm} />}
   </>
 }
 
@@ -478,13 +510,16 @@ export default function MoneyCentre() {
   const [saved, setSaved] = useState(null)
   // Open a payment: job payments open their job, repeat payments the cash flow page, everything else the £ form
   const onOpen = it => {
-    if (it.job) return nav(`/job/${it.job}/money`)
     if (it.src === 'genpay') return nav('/cashflow')
     if (it.src === 'iou') return alert('This is in Owed between you at the top. Untick it there to stop it counting.')
-    if (it.src !== 'money') return
+    if (it.src !== 'money') return it.job ? nav(`/job/${it.job}/money`) : undefined
     if (isLocked(it.date)) return alert(lockMsg(it.date))
     const r = list('money').find(x => x.id === it.id)
-    if (r) setQm({ id: r.id, data: r.data, job_id: r.job_id })
+    if (!r) return
+    // The £ form handles these; anything else on a job (wages, CIS details) opens in the job's own money page
+    const fits = r.data.dir === 'in' || ['transfer', 'materials', 'contractor', 'vehicle', 'other'].includes(r.data.cat)
+    if (r.job_id && (!fits || num(r.data.cisRate))) return nav(`/job/${r.job_id}/money`)
+    setQm({ id: r.id, data: r.data, job_id: r.job_id })
   }
   return (
     <div className="page">
