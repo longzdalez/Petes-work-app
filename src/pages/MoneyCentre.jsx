@@ -261,6 +261,12 @@ function paymentViews(items, owners) {
   const notes = (x, y) => list('iou', r => r.data.from === x && r.data.to === y && num(r.data.amount) > 0)
     .map(r => ({ key: r.id, id: r.id, src: 'iounote', kind: 'iou', date: r.data.date || '', desc: r.data.desc || '', amount: num(r.data.amount), payer: x, to: y, ticked: !!r.data.ticked, rec: r }))
     .sort((p, q) => q.date.localeCompare(p.date))
+  // Money in is only money from someone else (clients). Anything one of you paid the other, if it was put in as money in, is left off this list.
+  const fromOwner = it => {
+    if (isOwner(it.from)) return true
+    const to = againstOf(it, owners), txt = (it.desc || '').toLowerCase()
+    return owners.some(n => n !== to && new RegExp(`\\b${n.toLowerCase()}\\b`).test(txt))
+  }
   const spent = (n, cats) => items.filter(it => it.kind === 'expense' && it.payer === n && cats.includes(it.cat))
   const pairs = a && b ? [[b, a], [a, b]] : []
   const people = b ? [b, a] : [a]
@@ -270,7 +276,7 @@ function paymentViews(items, owners) {
     ...pairs.map(([x, y]) => ({ k: `owe-${x}`, title: `${x} owes ${y}`, rows: notes(x, y), iou: { from: x, to: y }, owes: true })),
     ...people.map(n => ({ k: `mat-${n}`, title: `${n} materials paid`, rows: spent(n, ['materials']), add: { data: { dir: 'out', cat: 'materials', payer: n } } })),
     ...people.map(n => ({ k: `sub-${n}`, title: `${n} subcontractor payments`, rows: spent(n, ['contractor']), add: { data: { dir: 'out', cat: 'contractor', payer: n } } })),
-    { k: 'in', title: 'Money in', rows: items.filter(it => it.kind === 'income'), add: { data: { dir: 'in' } } },
+    { k: 'in', title: 'Money in', rows: items.filter(it => it.kind === 'income' && !fromOwner(it)), add: { data: { dir: 'in' } }, hidden: items.filter(it => it.kind === 'income' && fromOwner(it)).length },
     { k: 'bal', title: 'Balance to date', balance: true },
   ]
   const unmarked = items.filter(it => (it.kind === 'income' && !againstOf(it, owners)) || (it.kind === 'expense' && !isOwner(it.payer)))
@@ -331,6 +337,7 @@ function PaymentsCard({ items, t, owners, setQm, onOpen }) {
           <div><span>{v.k === 'all' ? 'Newest first' : v.title}</span><b>{v.k === 'all' ? `${v.rows.length} payment${v.rows.length === 1 ? '' : 's'}` : money(v.total)}</b></div>
           {(v.add || v.iou) && <button className="btn primary" onClick={add}><Icon name="plus" size={18} /> Add</button>}
         </div>
+        {v.k === 'in' && <p className="small muted" style={{ marginTop: -4 }}>Only money paid to {owners.join(' or ')} by someone else.{v.hidden ? ` ${v.hidden} payment${v.hidden === 1 ? '' : 's'} between you ${v.hidden === 1 ? 'is' : 'are'} left off; ${v.hidden === 1 ? "it's" : "they're"} still in the full list.` : ''}</p>}
         {v.owes && <p className="small muted" style={{ marginTop: -4 }}>Total is what's not ticked yet. Ticked ones are already in the balance.</p>}
         {v.rows.length === 0 && <p className="muted small">Nothing here yet.</p>}
         <div className="ml-list">{v.rows.slice(0, shown).map(it => <ListRow key={it.key} it={it} owners={owners} onOpen={open} />)}</div>
