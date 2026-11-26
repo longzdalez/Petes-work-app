@@ -82,3 +82,8 @@
 .pay-bal .mc-big { font-size: 19px; font-weight: 900; margin: 4px 0 12px; }
 .pay-bal .mc-people { margin-bottom: 10px; }
 .ml-row.done { opacity: .6; }
+/* Still owed on jobs: job worth less paid invoices */
+.owed-jobs { display: grid; gap: 2px; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; background: linear-gradient(180deg, #f2fcf6, #dff5e8); }
+.owed-jobs .card-head { margin-bottom: 0; }
+.owed-jobs .card-head svg { color: var(--g700, #128a55); }
+.owed-jobs-total { font-size: 26px; font-weight: 900; color: var(--g700, #128a55); letter-spacing: -.01em; }
