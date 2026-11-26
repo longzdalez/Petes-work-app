@@ -8,6 +8,7 @@ import { JOB_STATUS, jobProgress, saveTemplate, smallImage, jobStatus } from '..
 import { pickFile, whatsApp } from '../files'
 import { jobMoney, thisWeek } from '../summary'
 import { TodoList } from '../Todos'
+import '../quote-lines.css'
 
 export const TABS = [
   { key: '', label: 'Overview', icon: 'info' },
@@ -112,13 +113,18 @@ export function ScopeAndValue({ job, compact }) {
   const hasSplit = d.valueMaterials !== undefined && d.valueMaterials !== '' || d.valueLabour !== undefined && d.valueLabour !== ''
   // Job value = materials + labour
   const setPart = (k, v) => { const p = { ...d, [k]: clean(v) }; set({ [k]: clean(v), value: num(p.valueMaterials) + num(p.valueLabour) }) }
-  const [itemise, setItemise] = useState(false)
-  const lines = Array.isArray(d.materialLines) ? d.materialLines : []
-  // Saving the lines sets Materials £ to their total (and so the job value). No lines left = back to one typed figure.
-  const saveLines = ls => {
-    const total = Math.round(ls.reduce((s, l) => s + num(l.amount), 0) * 100) / 100
-    set({ materialLines: ls, ...(ls.length ? { valueMaterials: total, value: total + num(d.valueLabour) } : {}) })
+  const [quoting, setQuoting] = useState(false)
+  const [costing, setCosting] = useState(false)
+  const qlines = Array.isArray(d.quoteLines) ? d.quoteLines : []
+  const costs = Array.isArray(d.refCosts) ? d.refCosts : []
+  const r2 = n => Math.round(n * 100) / 100
+  // Saving the quote lines sets Materials £, Labour £ and so the job value. No lines left = back to typed figures.
+  const saveQuote = ls => {
+    const m = r2(ls.reduce((t, l) => t + num(l.materials), 0)), lb = r2(ls.reduce((t, l) => t + num(l.labour), 0))
+    set({ quoteLines: ls, ...(ls.length ? { valueMaterials: m, valueLabour: lb, value: r2(m + lb) } : {}) })
   }
+  const cm = r2(costs.filter(c => c.kind !== 'labour').reduce((t, c) => t + num(c.amount), 0))
+  const cl = r2(costs.filter(c => c.kind === 'labour').reduce((t, c) => t + num(c.amount), 0))
   const body = <>
     <Field label={compact ? "Scope of works" : "What needs doing"} value={d.scope} onChange={v => set({ scope: v })} multiline rows={compact ? 4 : 6} placeholder="What needs doing on this job, e.g. strip out kitchen, move radiator, first and second fix electrics, plaster, fit units" />
     <label className="field"><span>Job value</span>
@@ -127,58 +133,151 @@ export function ScopeAndValue({ job, compact }) {
         <button className={vt === 'quote' ? 'on' : ''} onClick={() => set({ valueType: 'quote' })}>Quotation</button>
       </div>
     </label>
-    <div className="two">
-      {lines.length
-        ? <label className="field"><span>Materials £</span><button className="mat-lines-btn" onClick={() => setItemise(true)}><b>{money(num(d.valueMaterials))}</b><small>{lines.length} line{lines.length === 1 ? '' : 's'} · tap to change</small></button></label>
-        : <Field label="Materials £" inputMode="decimal" value={d.valueMaterials ?? ''} onChange={v => setPart('valueMaterials', v)} placeholder="0.00" />}
-      <Field label="Labour £" inputMode="decimal" value={d.valueLabour ?? ''} onChange={v => setPart('valueLabour', v)} placeholder="0.00" />
-    </div>
-    {!lines.length && <button className="link-btn mat-lines-add" onClick={() => setItemise(true)}><Icon name="plus" size={16} /> Break materials into lines</button>}
+    {qlines.length > 0 ? <>
+      <div className="ql-list">
+        {qlines.map(l => (
+          <button key={l.id} className="ql-row" onClick={() => setQuoting(true)}>
+            <span className="ql-t"><b>{l.item || 'Item'}</b>{l.desc ? <small>{l.desc}</small> : null}</span>
+            <span className="ql-n"><b>{money(num(l.materials) + num(l.labour))}</b><small>M {money(num(l.materials))} · L {money(num(l.labour))}</small></span>
+          </button>
+        ))}
+      </div>
+      <div className="two">
+        <label className="field"><span>Materials £</span><button className="mat-lines-btn" onClick={() => setQuoting(true)}><b>{money(num(d.valueMaterials))}</b><small>from {qlines.length} line{qlines.length === 1 ? '' : 's'}</small></button></label>
+        <label className="field"><span>Labour £</span><button className="mat-lines-btn" onClick={() => setQuoting(true)}><b>{money(num(d.valueLabour))}</b><small>tap to change</small></button></label>
+      </div>
+    </> : <>
+      <div className="two">
+        <Field label="Materials £" inputMode="decimal" value={d.valueMaterials ?? ''} onChange={v => setPart('valueMaterials', v)} placeholder="0.00" />
+        <Field label="Labour £" inputMode="decimal" value={d.valueLabour ?? ''} onChange={v => setPart('valueLabour', v)} placeholder="0.00" />
+      </div>
+    </>}
+    <button className="link-btn mat-lines-add" onClick={() => setQuoting(true)}><Icon name="plus" size={16} /> {qlines.length ? 'Edit quote lines' : 'Build the quote in lines (item, description, materials, labour)'}</button>
     <div className="worth-total"><span>{vt === 'estimate' ? 'Estimate' : 'Quotation'} total</span><b>{money(num(d.value))}</b></div>
     {!hasSplit && num(d.value) > 0 && <p className="small muted" style={{ marginTop: -6 }}>Put in the materials and labour above and the total adds itself up.</p>}
     <Field label="Details (optional)" value={d.valueNotes} onChange={v => set({ valueNotes: v })} multiline rows={2} placeholder="e.g. Includes materials, excludes kitchen units" />
+    <div className="mycosts">
+      <div className="mycosts-head"><b>My costs</b><span>Just for you. These are not in the {vt === 'estimate' ? 'estimate' : 'quote'}.</span></div>
+      {costs.length > 0 && <div className="ql-list">
+        {costs.map(c => (
+          <button key={c.id} className="ql-row" onClick={() => setCosting(true)}>
+            <span className="ql-t"><b>{c.desc || (c.kind === 'labour' ? 'Labour' : 'Materials')}</b></span>
+            <span className={'cost-kind ' + (c.kind === 'labour' ? 'lab' : 'mat')}>{c.kind === 'labour' ? 'Labour' : 'Materials'}</span>
+            <span className="ql-n"><b>{money(num(c.amount))}</b></span>
+          </button>
+        ))}
+        <div className="cost-sums"><span>Materials <b>{money(cm)}</b></span><span>Labour <b>{money(cl)}</b></span><span>Total <b>{money(r2(cm + cl))}</b></span></div>
+      </div>}
+      <button className="link-btn mat-lines-add" onClick={() => setCosting(true)}><Icon name="plus" size={16} /> {costs.length ? 'Edit my costs' : 'Add my materials and labour costs'}</button>
+    </div>
   </>
-  const sheet = itemise && <MaterialLinesSheet lines={lines} current={num(d.valueMaterials)} onSave={saveLines} onClose={() => setItemise(false)} />
-  if (compact) return <>{body}{sheet}</>
+  const sheets = <>
+    {quoting && <QuoteLinesSheet lines={qlines} d={d} onSave={saveQuote} onClose={() => setQuoting(false)} />}
+    {costing && <CostsSheet costs={costs} onSave={ls => set({ refCosts: ls })} onClose={() => setCosting(false)} />}
+  </>
+  if (compact) return <>{body}{sheets}</>
   return (
     <section className="card scope-card">
       <div className="card-head"><h2>Scope of works</h2>{d.value ? <span className="pill orange">{vt === 'estimate' ? 'Estimate' : 'Quote'} {money(d.value)}</span> : null}</div>
       {body}
-      {sheet}
+      {sheets}
     </section>
   )
 }
 
-// Materials for the quote as separate lines (description and amount) that add up to the Materials £ figure
 let lineSeq = 0
-const newLine = (desc = '', amount = '') => ({ id: `l${Date.now().toString(36)}${lineSeq++}`, desc, amount })
-function MaterialLinesSheet({ lines, current, onSave, onClose }) {
-  // First time: keep any figure already typed in as the first line, so nothing is lost
-  const [ls, setLs] = useState(() => lines.length ? lines.map(l => ({ ...l, amount: l.amount === '' ? '' : String(l.amount) }))
-    : current > 0 ? [newLine('Materials', String(current)), newLine()] : [newLine()])
+const lineId = () => `l${Date.now().toString(36)}${lineSeq++}`
+const newQuoteLine = (o = {}) => ({ id: lineId(), item: '', desc: '', materials: '', labour: '', ...o })
+const amt = v => v === '' || v == null ? '' : String(v)
+const money2 = e => e.target.value.replace(/[^\d.,]/g, '')
+
+// The quote as lines: item, description, materials and labour. Their totals become Materials £, Labour £ and the job value.
+function QuoteLinesSheet({ lines, d, onSave, onClose }) {
+  // First time: carry over whatever is already in the job (material lines, typed materials and labour) so nothing is lost
+  const [ls, setLs] = useState(() => {
+    if (lines.length) return lines.map(l => ({ ...l, materials: amt(l.materials), labour: amt(l.labour) }))
+    const old = Array.isArray(d.materialLines) ? d.materialLines : []
+    const seed = old.length ? old.map(l => newQuoteLine({ item: l.desc, materials: amt(l.amount) }))
+      : num(d.valueMaterials) > 0 ? [newQuoteLine({ item: 'Materials', materials: amt(d.valueMaterials) })] : []
+    if (num(d.valueLabour) > 0) seed.push(newQuoteLine({ item: 'Labour', labour: amt(d.valueLabour) }))
+    return [...seed, newQuoteLine()]
+  })
   const [focus, setFocus] = useState(null)
   const setL = (id, p) => setLs(x => x.map(l => l.id === id ? { ...l, ...p } : l))
-  const add = () => { const l = newLine(); setLs(x => [...x, l]); setFocus(l.id) }
-  const total = ls.reduce((s, l) => s + num(l.amount), 0)
+  const add = () => { const l = newQuoteLine(); setLs(x => [...x, l]); setFocus(l.id) }
+  const tm = ls.reduce((t, l) => t + num(l.materials), 0), tl = ls.reduce((t, l) => t + num(l.labour), 0)
   const save = () => {
-    const keep = ls.filter(l => l.desc.trim() || num(l.amount)).map(l => ({ id: l.id, desc: l.desc.trim(), amount: num(l.amount) }))
+    const keep = ls.filter(l => l.item.trim() || l.desc.trim() || num(l.materials) || num(l.labour))
+      .map(l => ({ id: l.id, item: l.item.trim(), desc: l.desc.trim(), materials: num(l.materials), labour: num(l.labour) }))
     onSave(keep); onClose()
   }
   return (
-    <Sheet open onClose={onClose} title="Materials breakdown" full>
-      <div className="ml-lines">
+    <Sheet open onClose={onClose} title={(d.valueType === 'estimate' ? 'Estimate' : 'Quote') + ' lines'} full>
+      <div className="ql-edit">
         {ls.map((l, i) => (
-          <div key={l.id} className="ml-line">
-            <input className="ml-desc" value={l.desc} placeholder={i === 0 ? 'e.g. Oak boards' : 'Description'} autoFocus={focus === l.id} aria-label="Description" onChange={e => setL(l.id, { desc: e.target.value })} />
-            <label className="ml-amt-in"><span>£</span><input inputMode="decimal" value={l.amount} placeholder="0.00" aria-label="Amount in pounds"
-              onChange={e => setL(l.id, { amount: e.target.value.replace(/[^\d.,]/g, '') })} onKeyDown={e => e.key === 'Enter' && add()} /></label>
-            <button className="icon-btn" aria-label="Remove this line" onClick={() => setLs(x => x.filter(y => y.id !== l.id))}><Icon name="close" size={18} /></button>
+          <div key={l.id} className="ql-card">
+            <div className="ql-top">
+              <input className="ql-in" value={l.item} placeholder={i === 0 ? 'Item, e.g. Wardrobe carcasses' : 'Item'} autoFocus={focus === l.id} aria-label="Item" onChange={e => setL(l.id, { item: e.target.value })} />
+              <button className="icon-btn" aria-label="Remove this line" onClick={() => setLs(x => x.filter(y => y.id !== l.id))}><Icon name="close" size={18} /></button>
+            </div>
+            <input className="ql-in" value={l.desc} placeholder="Description" aria-label="Description" onChange={e => setL(l.id, { desc: e.target.value })} />
+            <div className="ql-amts">
+              <label className="ml-amt-in"><em>Materials</em><span>£</span><input inputMode="decimal" value={l.materials} placeholder="0.00" aria-label="Materials in pounds" onChange={e => setL(l.id, { materials: money2(e) })} /></label>
+              <label className="ml-amt-in"><em>Labour</em><span>£</span><input inputMode="decimal" value={l.labour} placeholder="0.00" aria-label="Labour in pounds" onChange={e => setL(l.id, { labour: money2(e) })} onKeyDown={e => e.key === 'Enter' && add()} /></label>
+            </div>
           </div>
         ))}
         <button className="add-line" onClick={add}><Icon name="plus" size={18} /> Add line</button>
       </div>
-      <div className="worth-total"><span>Materials total</span><b>{money(total)}</b></div>
-      <p className="small muted" style={{ marginTop: -6 }}>This total becomes the Materials £ figure and is added to the labour for the job value.</p>
+      <div className="ql-sums"><span>Materials <b>{money(tm)}</b></span><span>Labour <b>{money(tl)}</b></span></div>
+      <div className="worth-total"><span>{d.valueType === 'estimate' ? 'Estimate' : 'Quotation'} total</span><b>{money(tm + tl)}</b></div>
+      <p className="small muted" style={{ marginTop: -6 }}>These totals become Materials £, Labour £ and the job value.</p>
+      <div className="sheet-actions">
+        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn primary" onClick={save}>Save</button>
+      </div>
+    </Sheet>
+  )
+}
+
+// Your own costs for the job (materials and labour). For reference only: they never change the job value.
+function CostsSheet({ costs, onSave, onClose }) {
+  const mk = (o = {}) => ({ id: lineId(), kind: 'materials', desc: '', amount: '', ...o })
+  const [ls, setLs] = useState(() => costs.length ? costs.map(c => ({ ...c, amount: amt(c.amount) })) : [mk()])
+  const [focus, setFocus] = useState(null)
+  const setL = (id, p) => setLs(x => x.map(l => l.id === id ? { ...l, ...p } : l))
+  const add = kind => { const l = mk({ kind: kind || ls[ls.length - 1]?.kind || 'materials' }); setLs(x => [...x, l]); setFocus(l.id) }
+  const tm = ls.filter(l => l.kind !== 'labour').reduce((t, l) => t + num(l.amount), 0)
+  const tl = ls.filter(l => l.kind === 'labour').reduce((t, l) => t + num(l.amount), 0)
+  const save = () => {
+    onSave(ls.filter(l => l.desc.trim() || num(l.amount)).map(l => ({ id: l.id, kind: l.kind, desc: l.desc.trim(), amount: num(l.amount) })))
+    onClose()
+  }
+  return (
+    <Sheet open onClose={onClose} title="My costs" full>
+      <p className="small muted" style={{ marginTop: 0 }}>For your reference only. Nothing here changes the quote or the job value.</p>
+      <div className="ql-edit">
+        {ls.map(l => (
+          <div key={l.id} className="ql-card">
+            <div className="ql-top">
+              <div className="seg small" style={{ margin: 0, flex: 1 }}>
+                <button className={l.kind !== 'labour' ? 'on' : ''} onClick={() => setL(l.id, { kind: 'materials' })}>Materials</button>
+                <button className={l.kind === 'labour' ? 'on' : ''} onClick={() => setL(l.id, { kind: 'labour' })}>Labour</button>
+              </div>
+              <button className="icon-btn" aria-label="Remove this line" onClick={() => setLs(x => x.filter(y => y.id !== l.id))}><Icon name="close" size={18} /></button>
+            </div>
+            <div className="ql-top">
+              <input className="ql-in" value={l.desc} placeholder={l.kind === 'labour' ? 'e.g. Fitter, 3 days' : 'e.g. Oak boards'} autoFocus={focus === l.id} aria-label="Description" onChange={e => setL(l.id, { desc: e.target.value })} />
+              <label className="ml-amt-in" style={{ width: 110 }}><span>£</span><input inputMode="decimal" value={l.amount} placeholder="0.00" aria-label="Amount in pounds" onChange={e => setL(l.id, { amount: money2(e) })} onKeyDown={e => e.key === 'Enter' && add()} /></label>
+            </div>
+          </div>
+        ))}
+        <div className="ql-addrow">
+          <button className="add-line" onClick={() => add('materials')}><Icon name="plus" size={18} /> Materials</button>
+          <button className="add-line" onClick={() => add('labour')}><Icon name="plus" size={18} /> Labour</button>
+        </div>
+      </div>
+      <div className="ql-sums"><span>Materials <b>{money(tm)}</b></span><span>Labour <b>{money(tl)}</b></span><span>Total <b>{money(tm + tl)}</b></span></div>
       <div className="sheet-actions">
         <button className="btn ghost" onClick={onClose}>Cancel</button>
         <button className="btn primary" onClick={save}>Save</button>

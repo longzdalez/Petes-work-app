@@ -22,7 +22,10 @@ export function newInvoice(job, type) {
     type, number: nextNumber(type), date: today(), due: ymd(due), status: 'draft',
     clientName: job.data.client || '', clientAddress: job.data.address || '', clientEmail: job.data.clientEmail || '', clientPhone: job.data.clientPhone || '',
     jobName: job.data.name || '', vatRate: 0, notes: '',
-    lines: [{ item: '', location: '', materials: '', labour: '' }],
+    // A new quote starts with the job's quote lines (not "My costs", which are only for the owners)
+    lines: type === 'quote' && Array.isArray(job.data.quoteLines) && job.data.quoteLines.length
+      ? job.data.quoteLines.map(l => ({ item: [l.item, l.desc].filter(Boolean).join('\n'), location: '', materials: l.materials ?? '', labour: l.labour ?? '' }))
+      : [{ item: '', location: '', materials: '', labour: '' }],
   }, { job_id: job.id })
 }
 
