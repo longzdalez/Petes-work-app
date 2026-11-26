@@ -251,6 +251,42 @@ function OwedBetween({ owners }) {
   )
 }
 
+// ---------- BP Owed: still owed on jobs ----------
+
+// What clients still owe: each job's worth, less the invoices on it that are ticked as paid (paid to either of you)
+export function jobsOwed() {
+  const paid = {}
+  list('invoice', r => r.data.type === 'invoice' && r.data.status === 'paid').forEach(r => { paid[r.job_id] = (paid[r.job_id] || 0) + invoiceTotals(r.data).total })
+  const rows = list('job', j => num(j.data.value) > 0).map(j => {
+    const worth = num(j.data.value), inv = paid[j.id] || 0
+    return { j, worth, inv, owed: Math.round((worth - inv) * 100) / 100 }
+  }).filter(x => x.owed > 0.004).sort((a, b) => b.owed - a.owed)
+  return { rows, total: rows.reduce((s, x) => s + x.owed, 0) }
+}
+
+function JobsOwedCard() {
+  const [open, setOpen] = useState(false)
+  const { rows, total } = jobsOwed()
+  return <>
+    <button className="card owed-jobs" onClick={() => setOpen(true)}>
+      <div className="card-head"><h2>BP Owed</h2><Icon name="right" size={20} /></div>
+      <b className="owed-jobs-total">{money(total)}</b>
+      <span className="small muted">{rows.length ? `${rows.length} job${rows.length === 1 ? '' : 's'} · tap to see each one` : 'Put the job value in on a job and it shows here until it\'s paid'}</span>
+    </button>
+    {open && <Sheet open onClose={() => setOpen(false)} title="BP Owed" full>
+      <div className="ml-head"><div><span>Total BP Owed</span><b>{money(total)}</b></div></div>
+      <p className="small muted" style={{ marginTop: -4 }}>Each job's worth, less the invoices ticked as paid. Tap a job to open its invoices.</p>
+      {rows.length === 0 && <p className="muted small">Nothing owed. Every job with a value has been paid in full.</p>}
+      <div className="ml-list">{rows.map(({ j, worth, inv, owed }) => (
+        <button key={j.id} className="ml-row" onClick={() => { setOpen(false); nav(`/job/${j.id}/invoices`) }}>
+          <span className="ml-text"><b>{j.data.name || 'Job'}</b><span>{[j.data.client, `Worth ${money(worth)}`, inv ? `${money(inv)} paid` : 'Nothing paid yet'].filter(Boolean).join(' · ')}</span></span>
+          <span className="ml-amt pos">{money(owed)}</span>
+        </button>
+      ))}</div>
+    </Sheet>}
+  </>
+}
+
 // ---------- Overview: who owes who, and the lists ----------
 
 // Every payment in one list, newest first, with buttons to show just one kind
@@ -372,6 +408,8 @@ function Overview({ items, t, owners, settings, setQm, onOpen }) {
         <p className="small muted" style={{ margin: 0 }}>Profit (money in minus money out) is split 50/50. What each of you paid out is added back, and money paid to you is taken off. The difference between you, halved, is what one owes the other.</p>
       </details>
     </section>
+
+    <JobsOwedCard />
 
     <PaymentsCard items={items} t={t} owners={owners} setQm={setQm} onOpen={onOpen} />
     <p className="small muted" style={{ margin: '0 4px 14px' }}>Catching up on older payments? Tap a button, then Add, and pick the date it was paid.</p>
