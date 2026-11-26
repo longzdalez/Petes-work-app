@@ -87,3 +87,5 @@
 .owed-jobs .card-head { margin-bottom: 0; }
 .owed-jobs .card-head svg { color: var(--g700, #128a55); }
 .owed-jobs-total { font-size: 26px; font-weight: 900; color: var(--g700, #128a55); letter-spacing: -.01em; }
+.owed-jobs.coming .owed-jobs-total { color: var(--orange-ink, #b35a14); }
+.owed-jobs.coming .card-head svg { color: var(--orange-ink, #b35a14); }
