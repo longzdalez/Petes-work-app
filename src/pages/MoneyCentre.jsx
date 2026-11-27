@@ -19,6 +19,7 @@ import { allItems, tally, settle, againstOf, lockedUntil, isLocked, lockMsg, fin
 import { moveOpeningToPayments } from '../catchup'
 import { jobStatus } from '../jobs'
 import QuickMoney, { SavedToast } from '../QuickMoney'
+import { MoneyPlanCard } from '../MoneyPlan'
 
 const KIND = { income: 'Money in', expense: 'Money out', drawing: 'Paid themselves', transfer: 'Between you' }
 const CAT = { materials: 'Materials', contractor: 'Subcontractor', wages: 'Wages', vehicle: 'Car', repeat: 'Repeat payment', other: 'Other', client: 'Client payment', transfer: 'Settle up' }
@@ -419,6 +420,7 @@ function Overview({ items, t, owners, settings, setQm, onOpen }) {
 
     <JobsOwedCard kind="owed" />
     <JobsOwedCard kind="coming" />
+    <MoneyPlanCard owners={owners} />
 
     <PaymentsCard items={items} t={t} owners={owners} setQm={setQm} onOpen={onOpen} />
     <p className="small muted" style={{ margin: '0 4px 14px' }}>Catching up on older payments? Tap a button, then Add, and pick the date it was paid.</p>
