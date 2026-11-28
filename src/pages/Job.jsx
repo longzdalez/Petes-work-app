@@ -8,6 +8,7 @@ import { JOB_STATUS, jobProgress, saveTemplate, smallImage, jobStatus } from '..
 import { pickFile, whatsApp } from '../files'
 import { jobMoney, thisWeek } from '../summary'
 import { TodoList } from '../Todos'
+import { useSettings } from './Settings'
 import '../quote-lines.css'
 
 export const TABS = [
@@ -322,6 +323,19 @@ function WeekOnSite({ id }) {
   )
 }
 
+// Whose job it is: what's still owed on it shows as owed to that person in the Money centre
+function WhoseJob({ job }) {
+  const { owners } = useSettings()
+  const who = job.data.owner || ''
+  return <>
+    <div className="small muted status-q">Whose job is it?</div>
+    <div className="seg whose-seg">
+      {owners.map(n => <button key={n} className={who === n ? 'on' : ''} onClick={() => update(job.id, { owner: who === n ? '' : n })}>{n}'s job</button>)}
+    </div>
+    <div className="small muted status-help">{who ? `What's still owed on this job counts as owed to ${who}.` : 'Pick one so the Money centre knows who this money is owed to.'}</div>
+  </>
+}
+
 export default function JobInfo({ id }) {
   const job = useRecord(id)
   const extras = useList('extra', r => r.job_id === id && r.data.status === 'pending')
@@ -387,6 +401,8 @@ export default function JobInfo({ id }) {
         ))}
       </div>
       <div className="small muted status-help">{{ quoting: "You're still pricing this job up.", booked: 'The job is agreed and booked in.', onsite: "You're working on this job now.", finished: 'Done. It moves to the Finished list on the home page.' }[st]}</div>
+
+      <WhoseJob job={job} />
 
       <div className="hub">
         <HubTile icon="materials" label="Materials" color="#4a90d9" onClick={() => go('materials')} />
