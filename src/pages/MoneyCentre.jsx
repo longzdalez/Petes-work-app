@@ -272,23 +272,28 @@ const OWED_KINDS = {
   coming: { title: 'Coming up', statuses: ['booked'], cls: ' coming', empty: 'Jobs booked in but not on site yet show here', note: 'Jobs booked in but not on site yet: each job\'s worth, less any invoices already ticked as paid.', none: 'No booked jobs waiting to start.' },
 }
 
-function JobsOwedCard({ kind }) {
+function JobsOwedCard({ kind, owners }) {
   const k = OWED_KINDS[kind]
   const [open, setOpen] = useState(false)
   const { rows, total } = jobsOwed(k.statuses)
+  // Split by whose job it is (set on each job); jobs with nobody picked show separately
+  const whose = j => owners.includes(j.data.owner) ? j.data.owner : ''
+  const split = [...owners, ''].map(n => ({ n, total: rows.filter(x => whose(x.j) === n).reduce((s, x) => s + x.owed, 0), count: rows.filter(x => whose(x.j) === n).length })).filter(x => x.n || x.count)
+  const Split = () => <div className="owed-split">{split.map(x => <div key={x.n || 'none'} className={x.n ? '' : 'none'}><span>{x.n ? `Owed to ${x.n}` : 'Not set'}</span><b>{money(x.total)}</b></div>)}</div>
   return <>
     <button className={'card owed-jobs' + k.cls} onClick={() => setOpen(true)}>
       <div className="card-head"><h2>{k.title}</h2><Icon name="right" size={20} /></div>
-      <b className="owed-jobs-total">{money(total)}</b>
+      <Split />
       <span className="small muted">{rows.length ? `${rows.length} job${rows.length === 1 ? '' : 's'} · tap to see each one` : k.empty}</span>
     </button>
     {open && <Sheet open onClose={() => setOpen(false)} title={k.title} full>
       <div className="ml-head"><div><span>Total {k.title}</span><b>{money(total)}</b></div></div>
-      <p className="small muted" style={{ marginTop: -4 }}>{k.note} Tap a job to open its invoices.</p>
+      <Split />
+      <p className="small muted" style={{ marginTop: -4 }}>{k.note} Whose job it is is set on each job. Tap a job to open its invoices.</p>
       {rows.length === 0 && <p className="muted small">{k.none}</p>}
       <div className="ml-list">{rows.map(({ j, worth, inv, owed }) => (
         <button key={j.id} className="ml-row" onClick={() => { setOpen(false); nav(`/job/${j.id}/invoices`) }}>
-          <span className="ml-text"><b>{j.data.name || 'Job'}</b><span>{[j.data.client, kind === 'coming' && j.data.start ? `Starts ${shortDate(j.data.start)}` : '', `Worth ${money(worth)}`, inv ? `${money(inv)} paid` : 'Nothing paid yet'].filter(Boolean).join(' · ')}</span></span>
+          <span className="ml-text"><b>{j.data.name || 'Job'}</b><span>{[whose(j) ? `${whose(j)}'s job` : 'Whose job? Not set', j.data.client, kind === 'coming' && j.data.start ? `Starts ${shortDate(j.data.start)}` : '', `Worth ${money(worth)}`, inv ? `${money(inv)} paid` : 'Nothing paid yet'].filter(Boolean).join(' · ')}</span></span>
           <span className={'ml-amt' + (kind === 'owed' ? ' pos' : '')}>{money(owed)}</span>
         </button>
       ))}</div>
@@ -418,8 +423,8 @@ function Overview({ items, t, owners, settings, setQm, onOpen }) {
       </details>
     </section>
 
-    <JobsOwedCard kind="owed" />
-    <JobsOwedCard kind="coming" />
+    <JobsOwedCard kind="owed" owners={owners} />
+    <JobsOwedCard kind="coming" owners={owners} />
     <MoneyPlanCard owners={owners} />
 
     <PaymentsCard items={items} t={t} owners={owners} setQm={setQm} onOpen={onOpen} />
